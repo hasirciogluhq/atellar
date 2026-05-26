@@ -9,35 +9,51 @@ import (
 	"context"
 )
 
-const getNodes = `-- name: GetNodes :many
-SELECT id, name, public_ip, private_ip, status, last_heartbeat, created_at, updated_at FROM nodes
+const getNodeById = `-- name: GetNodeById :one
+SELECT id, name, public_ip, private_ip, status, last_heartbeat, created_at, updated_at FROM nodes WHERE id = $1
 `
 
-func (q *Queries) GetNodes(ctx context.Context) ([]Node, error) {
-	rows, err := q.db.Query(ctx, getNodes)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Node
-	for rows.Next() {
-		var i Node
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.PublicIp,
-			&i.PrivateIp,
-			&i.Status,
-			&i.LastHeartbeat,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetNodeById(ctx context.Context, id string) (Node, error) {
+	row := q.db.QueryRow(ctx, getNodeById, id)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PublicIp,
+		&i.PrivateIp,
+		&i.Status,
+		&i.LastHeartbeat,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getNodeByName = `-- name: GetNodeByName :one
+SELECT id, name, public_ip, private_ip, status, last_heartbeat, created_at, updated_at FROM nodes WHERE name = $1
+`
+
+func (q *Queries) GetNodeByName(ctx context.Context, name string) (Node, error) {
+	row := q.db.QueryRow(ctx, getNodeByName, name)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PublicIp,
+		&i.PrivateIp,
+		&i.Status,
+		&i.LastHeartbeat,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateNodeHeartbeat = `-- name: UpdateNodeHeartbeat :exec
+UPDATE nodes SET last_heartbeat = now() WHERE id = $1
+`
+
+func (q *Queries) UpdateNodeHeartbeat(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, updateNodeHeartbeat, id)
+	return err
 }
