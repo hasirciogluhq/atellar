@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/hasirciogluhq/atellar/cmd/api/shared"
 	"github.com/hasirciogluhq/atellar/internal/nodes/domain/node"
 	"github.com/hasirciogluhq/atellar/internal/nodes/ports"
 )
@@ -12,8 +13,8 @@ type NodeHeartbeatUseCase struct {
 	nodeRepository ports.NodeRepositoryInterface
 }
 
-func NewNodeHeartbeatUseCase(nodeRepository ports.NodeRepositoryInterface) *NodeHeartbeatUseCase {
-	return &NodeHeartbeatUseCase{nodeRepository: nodeRepository}
+func NewNodeHeartbeatUseCase(infra *shared.Infrastructure) *NodeHeartbeatUseCase {
+	return &NodeHeartbeatUseCase{nodeRepository: infra.Repositories.Nodes}
 }
 
 func (u *NodeHeartbeatUseCase) IDNodeResolution(ctx context.Context, nodeID string) (*node.NodeEntity, error) {

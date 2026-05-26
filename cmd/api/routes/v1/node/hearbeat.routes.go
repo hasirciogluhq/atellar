@@ -11,7 +11,7 @@ import (
 func registerHeartbeatRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 	c.POST("/:nodeId/heartbeat", func(c *gin.Context) {
 		nodeID := c.Param("nodeId")
-		useCase := useCases.NewNodeHeartbeatUseCase(infra.Repositories.Nodes)
+		useCase := useCases.NewNodeHeartbeatUseCase(infra)
 		err := useCase.Execute(c.Request.Context(), nodeID)
 
 		if err != nil {
@@ -24,7 +24,7 @@ func registerHeartbeatRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 
 	c.GET("/:nodeId/heartbeat", func(c *gin.Context) {
 		nodeID := c.Param("nodeId")
-		useCase := useCases.NewNodeHeartbeatUseCase(infra.Repositories.Nodes)
+		useCase := useCases.NewNodeHeartbeatUseCase(infra)
 		err := useCase.Execute(c.Request.Context(), nodeID)
 
 		if err != nil {
