@@ -1,10 +1,10 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    queries: "./internal/db/queries"
-    schema: "./internal/db/migrations"
+    queries: "./internal/db/queries/*"
+    schema: "./internal/db/migrations/*.sql"
     gen:
       go:
-        package: "cp_db"
+        package: "db_generated"
         out: "internal/db/generated"
         sql_package: "pgx/v5"

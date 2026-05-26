@@ -4,16 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
-	"time"
 
 	_ "github.com/lib/pq"
 
-	cp_db "github.com/hasirciogluhq/atellar/control-plane/internal/db/generated"
+	db_generated "github.com/hasirciogluhq/atellar/internal/db/generated"
 	"github.com/hasirciogluhq/migrator"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func main() {
@@ -47,24 +44,5 @@ func main() {
 		panic(err)
 	}
 
-	db := cp_db.New(pgxConn)
-
-	perfNow := time.Now()
-	db.CreateUser(context.Background(), cp_db.CreateUserParams{
-		Name: "Ahmet",
-		Bio: pgtype.Text{
-			String: "Developer",
-			Valid:  true,
-		},
-	})
-
-	since := time.Since(perfNow)
-
-	users, err := db.GetUsers(context.Background())
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println(users)
-	fmt.Println(since)
+	_ = db_generated.New(pgxConn)
 }

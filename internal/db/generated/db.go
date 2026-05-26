@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package cp_db
+package db_generated
 
 import (
 	"context"
