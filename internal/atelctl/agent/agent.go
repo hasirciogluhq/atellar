@@ -3,10 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/hasirciogluhq/atellar/internal/agent"
 	"github.com/hasirciogluhq/atellar/internal/agent/config"
@@ -14,74 +12,30 @@ import (
 )
 
 const (
-	DefaultAgentBinPath = "/usr/local/bin/atellar-agent"
-	SystemdUnitPath     = "/etc/systemd/system/atellar-agent.service"
-	LogDir              = "/var/log/atellar"
+	AgentBinPath    = "/usr/local/bin/atellar-agent"
+	SystemdUnitPath = "/etc/systemd/system/atellar-agent.service"
+	LogDir          = "/var/log/atellar"
 )
 
-// --- init: prepare node locally (no control plane call) ---
-
-type InitOptions struct {
-	ContainerdSock string
-	ConfigDir      string
-	LogDir         string
-}
-
-type InitResult struct {
-	ConfigDir      string
-	LogDir         string
-	ContainerdSock string
-}
-
-func Init(opts InitOptions) (*InitResult, error) {
-	containerdSock := opts.ContainerdSock
-	if containerdSock == "" {
-		containerdSock = "/run/containerd/containerd.sock"
-	}
-
-	configDir := opts.ConfigDir
-	if configDir == "" {
-		configDir = config.SystemConfigDir
-	}
-
-	logDir := opts.LogDir
-	if logDir == "" {
-		logDir = LogDir
-	}
-
-	for _, dir := range []string{configDir, logDir} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, fmt.Errorf("create %s: %w", dir, err)
-		}
-	}
-
-	if _, err := os.Stat(containerdSock); err != nil {
-		return nil, fmt.Errorf("containerd socket not found at %s", containerdSock)
-	}
-
-	return &InitResult{
-		ConfigDir:      configDir,
-		LogDir:         logDir,
-		ContainerdSock: containerdSock,
-	}, nil
-}
-
-// --- join: register with control plane + write agent config ---
-
 type JoinOptions struct {
-	Token             string
+	JoinToken         string
 	ControlPlaneURL   string
 	NodeName          string
 	PublicIP          string
 	PrivateIP         string
-	ContainerdSock    string
+	ContainerdSocket  string
 	HeartbeatInterval string
-	ConfigPath        string
 }
 
 func Join(ctx context.Context, opts JoinOptions) (*config.Config, error) {
-	if opts.Token == "" {
+	if opts.JoinToken == "" {
 		return nil, fmt.Errorf("join token is required")
+	}
+	if opts.PublicIP == "" {
+		return nil, fmt.Errorf("public ip is required")
+	}
+	if opts.PrivateIP == "" {
+		return nil, fmt.Errorf("private ip is required")
 	}
 
 	controlPlaneURL := opts.ControlPlaneURL
@@ -89,36 +43,31 @@ func Join(ctx context.Context, opts JoinOptions) (*config.Config, error) {
 		controlPlaneURL = "http://localhost:8080"
 	}
 
-	configPath := opts.ConfigPath
-	if configPath == "" {
-		configPath = config.SystemConfigPath
+	containerdSocket := opts.ContainerdSocket
+	if containerdSocket == "" {
+		containerdSocket = "/run/containerd/containerd.sock"
 	}
 
-	containerdSock := opts.ContainerdSock
-	if containerdSock == "" {
-		containerdSock = "/run/containerd/containerd.sock"
+	interval := opts.HeartbeatInterval
+	if interval == "" {
+		interval = "5s"
 	}
 
-	heartbeatInterval := opts.HeartbeatInterval
-	if heartbeatInterval == "" {
-		heartbeatInterval = "5s"
+	if _, err := os.Stat(containerdSocket); err != nil {
+		return nil, fmt.Errorf("containerd socket not found at %s", containerdSocket)
 	}
 
-	if _, err := os.Stat(containerdSock); err != nil {
-		return nil, fmt.Errorf("containerd socket not found at %s (run `atelctl agent init` first)", containerdSock)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+	if err := os.MkdirAll(config.SystemConfigDir, 0o755); err != nil {
 		return nil, err
 	}
 
 	api := client.New(client.Options{BaseURL: controlPlaneURL})
-	result, err := api.RegisterNode(ctx, opts.Token, client.RegisterNodeRequest{
+	result, err := api.RegisterNode(ctx, opts.JoinToken, client.RegisterNodeRequest{
 		Name:           opts.NodeName,
 		PublicIP:       opts.PublicIP,
 		PrivateIP:      opts.PrivateIP,
 		AgentVersion:   agent.Version,
-		ContainerdSock: containerdSock,
+		ContainerdSock: containerdSocket,
 	})
 	if err != nil {
 		return nil, err
@@ -132,102 +81,79 @@ func Join(ctx context.Context, opts JoinOptions) (*config.Config, error) {
 		OverlaySubnet:     result.Node.OverlaySubnet,
 		NodeAPIKey:        result.NodeAPIKey,
 		APIKeyExpiresAt:   result.APIKeyExpiresAt,
-		ContainerdSock:    containerdSock,
-		HeartbeatInterval: heartbeatInterval,
+		ContainerdSock:    containerdSocket,
+		HeartbeatInterval: interval,
 	}
 
-	if err := config.Save(configPath, cfg); err != nil {
+	if err := config.Save(config.SystemConfigPath, cfg); err != nil {
 		return nil, err
 	}
 
+	_ = runSystemctl("restart", "atellar-agent.service")
 	return &cfg, nil
 }
 
-// --- install (systemd) ---
-
-type InstallOptions struct {
-	AgentBinSource string
-	AgentBinTarget string
-	ConfigPath     string
-}
-
 type InstallResult struct {
-	AgentBinPath string
-	ConfigPath   string
-	UnitPath     string
+	UnitPath string
+	NodeID   string
 }
 
-func Install(opts InstallOptions) (*InstallResult, error) {
-	if opts.AgentBinSource == "" {
-		return nil, fmt.Errorf("agent binary source path is required")
+func Install(ctx context.Context, autoJoin bool, join JoinOptions) (*InstallResult, error) {
+	if autoJoin && join.JoinToken == "" {
+		return nil, fmt.Errorf("--join-token is required with --auto-join")
 	}
 
-	agentBinTarget := opts.AgentBinTarget
-	if agentBinTarget == "" {
-		agentBinTarget = DefaultAgentBinPath
-	}
-
-	configPath := opts.ConfigPath
-	if configPath == "" {
-		configPath = config.SystemConfigPath
-	}
-
-	if _, err := os.Stat(configPath); err != nil {
-		return nil, fmt.Errorf("agent config not found at %s (run `atelctl agent join` first)", configPath)
-	}
-
-	if err := copyFile(opts.AgentBinSource, agentBinTarget, 0o755); err != nil {
-		return nil, fmt.Errorf("install agent binary: %w", err)
-	}
-
-	unitContents := systemdUnit(agentBinTarget)
-	if err := os.WriteFile(SystemdUnitPath, []byte(unitContents), 0o644); err != nil {
-		return nil, fmt.Errorf("write systemd unit: %w", err)
-	}
-
-	for _, args := range [][]string{
-		{"daemon-reload"},
-		{"enable", "atellar-agent.service"},
-		{"restart", "atellar-agent.service"},
-	} {
-		if err := runSystemctl(args...); err != nil {
-			return nil, err
+	for _, dir := range []string{config.SystemConfigDir, LogDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("create %s: %w", dir, err)
 		}
 	}
 
-	return &InstallResult{
-		AgentBinPath: agentBinTarget,
-		ConfigPath:   configPath,
-		UnitPath:     SystemdUnitPath,
-	}, nil
-}
+	if _, err := os.Stat(AgentBinPath); err != nil {
+		return nil, fmt.Errorf("atellar-agent not found at %s", AgentBinPath)
+	}
 
-// --- renew-key ---
+	if err := os.WriteFile(SystemdUnitPath, []byte(systemdUnit(AgentBinPath)), 0o644); err != nil {
+		return nil, fmt.Errorf("write systemd unit: %w", err)
+	}
+
+	if err := runSystemctl("daemon-reload"); err != nil {
+		return nil, err
+	}
+	if err := runSystemctl("enable", "atellar-agent.service"); err != nil {
+		return nil, err
+	}
+
+	result := &InstallResult{UnitPath: SystemdUnitPath}
+
+	if autoJoin {
+		cfg, err := Join(ctx, join)
+		if err != nil {
+			return nil, err
+		}
+		result.NodeID = cfg.NodeID
+	}
+
+	return result, nil
+}
 
 type RenewKeyOptions struct {
 	ControlPlaneURL string
 	NodeAPIKey      string
-	ConfigPath      string
 	UpdateConfig    bool
 }
 
 type RenewKeyResult struct {
 	NodeAPIKey      string
 	APIKeyExpiresAt string
-	ConfigPath      string
 }
 
 func RenewKey(ctx context.Context, opts RenewKeyOptions) (*RenewKeyResult, error) {
-	configPath := opts.ConfigPath
-	if configPath == "" {
-		configPath = config.SystemConfigPath
-	}
-
 	controlPlaneURL := opts.ControlPlaneURL
 	apiKey := opts.NodeAPIKey
 
 	if opts.UpdateConfig || (controlPlaneURL == "" && apiKey == "") {
-		cfg, err := config.Load(configPath)
+		cfg, err := config.Load(config.SystemConfigPath)
 		if err != nil {
 			return nil, fmt.Errorf("load config: %w", err)
 		}
@@ -252,8 +178,8 @@ func RenewKey(ctx context.Context, opts RenewKeyOptions) (*RenewKeyResult, error
 		return nil, err
 	}
 
-	if opts.UpdateConfig || opts.ConfigPath != "" {
-		if err := config.UpdateNodeAPIKey(configPath, renewed.NodeAPIKey, renewed.APIKeyExpiresAt); err != nil {
+	if opts.UpdateConfig {
+		if err := config.UpdateNodeAPIKey(config.SystemConfigPath, renewed.NodeAPIKey, renewed.APIKeyExpiresAt); err != nil {
 			return nil, fmt.Errorf("update config: %w", err)
 		}
 	}
@@ -261,14 +187,13 @@ func RenewKey(ctx context.Context, opts RenewKeyOptions) (*RenewKeyResult, error
 	return &RenewKeyResult{
 		NodeAPIKey:      renewed.NodeAPIKey,
 		APIKeyExpiresAt: renewed.APIKeyExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
-		ConfigPath:      configPath,
 	}, nil
 }
 
 func systemdUnit(agentBinPath string) string {
 	return fmt.Sprintf(`[Unit]
 Description=Atellar Node Agent
-After=network-online.target
+After=network-online.target containerd.service
 Wants=network-online.target
 
 [Service]
@@ -280,27 +205,6 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 `, agentBinPath)
-}
-
-func copyFile(sourcePath, targetPath string, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return err
-	}
-
-	source, err := os.Open(sourcePath)
-	if err != nil {
-		return err
-	}
-	defer source.Close()
-
-	target, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
-	if err != nil {
-		return err
-	}
-	defer target.Close()
-
-	_, err = io.Copy(target, source)
-	return err
 }
 
 func runSystemctl(args ...string) error {

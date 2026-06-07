@@ -1,80 +1,57 @@
 # atelctl
 
-Binary: `atelctl` (`cmd/atelctl`)
-
-Operator tool for **cluster** (control plane) and **agent** (node) operations.
-
 ```
 atelctl
 ├── agent
-│   ├── init              # prepare node locally (dirs, containerd check)
-│   ├── join              # register with control plane + write config
-│   ├── install           # systemd install
+│   ├── install           # dirs + systemd (optional --auto-join)
+│   ├── join              # register + write /etc/atellar/agent.json
 │   └── renew-key
 └── cluster
     ├── nodes list
     └── containers list
 ```
 
-HTTP calls go through `pkg/client.AtellarClient`.
+Fixed paths (no flags):
+- Agent binary: `/usr/local/bin/atellar-agent`
+- Config: `/etc/atellar/agent.json`
+- Logs: `/var/log/atellar`
 
-## Agent flow
-
-```
-atelctl agent init → atelctl agent join → atelctl agent install
-```
-
-### `agent init`
-
-Prepares the node — no control plane call.
+## Flow
 
 ```bash
-sudo atelctl agent init \
-  --containerd-sock /run/containerd/containerd.sock \
-  --config-dir /etc/atellar \
-  --log-dir /var/log/atellar
+# 1. put binary on the node
+sudo cp atellar-agent /usr/local/bin/
+
+# 2. install service (+ optional join)
+sudo atelctl agent install --auto-join --join-token <TOKEN> --name node-1
+
+# or separately:
+sudo atelctl agent install
+atelctl agent join --join-token <TOKEN> --name node-1
 ```
 
-Creates config/log directories and verifies containerd socket.
+## `agent install`
 
-### `agent join`
+Creates `/etc/atellar`, `/var/log/atellar`, writes `atellar-agent.service`, enables it.
 
-Registers with the control plane and writes `/etc/atellar/agent.json`.
+Requires `atellar-agent` already at `/usr/local/bin/atellar-agent`.
 
-```bash
-atelctl agent join \
-  --token <JOIN_TOKEN> \
-  --control-plane-url http://localhost:8080 \
-  --name node-1
-```
+| Flag | Description |
+|------|-------------|
+| `--auto-join` | join after install |
+| `--join-token` | required with `--auto-join` |
+| `--name` | node name |
+| `--public-ip` | required for join / auto-join |
+| `--private-ip` | required for join / auto-join |
+| `--control-plane-url` | default `http://localhost:8080` |
 
-### `agent install`
+## `agent join`
 
-```bash
-sudo atelctl agent install --agent-bin ./atellar-agent
-```
+Writes full config to `/etc/atellar/agent.json` and restarts the agent service.
 
-### `agent renew-key`
-
-```bash
-atelctl agent renew-key --config /etc/atellar/agent.json
-```
-
-## Cluster commands
+## Cluster
 
 ```bash
 atelctl cluster nodes list
-atelctl cluster containers list --node-id <NODE_ID>
+atelctl cluster containers list --node-id <ID>
 ```
-
-## pkg/client
-
-Global HTTP API client used by atelctl and external tools:
-
-```go
-api := client.New(client.Options{BaseURL: "http://localhost:8080"})
-api.RegisterNode(ctx, joinToken, client.RegisterNodeRequest{...})
-api.ListNodes(ctx)
-```
-
-Service account auth: `ATELLAR_SERVICE_ACCOUNT_SECRET` / `ATELLAR_SERVICE_ACCOUNT_TOKEN` or `/var/run/secrets/atellar/service-account/secret`.

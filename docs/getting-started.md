@@ -28,35 +28,29 @@ curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
 
 Save the `token` value from the response — it is shown only once.
 
-## 3. Prepare and join node (atelctl)
+## 3. Install agent (atelctl)
 
-On the worker machine:
-
-```bash
-# prepare dirs + verify containerd
-sudo go run ./cmd/atelctl agent init
-
-# register with control plane
-sudo go run ./cmd/atelctl agent join \
-  --token <PLAIN_TOKEN> \
-  --control-plane-url http://<cp-host>:8080 \
-  --name node-1 \
-  --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5
-```
-
-`join` calls `POST /api/v1/nodes/register`, assigns overlay subnet/IP, issues a node API key, and writes `/etc/atellar/agent.json`.
-
-## 4. Install agent
+On the worker machine — one shot with auto-join:
 
 ```bash
 go build -o atellar-agent ./cmd/agent
+sudo cp atellar-agent /usr/local/bin/
 
 sudo go run ./cmd/atelctl agent install \
-  --agent-bin ./atellar-agent
+  --auto-join \
+  --join-token <PLAIN_TOKEN> \
+  --control-plane-url http://<cp-host>:8080 \
+  --name node-1
 ```
 
-Creates a systemd unit, enables and restarts the service.
+`install` creates dirs + systemd unit. With `--auto-join` it also registers the node and writes `/etc/atellar/agent.json`.
+
+Or separately:
+
+```bash
+sudo go run ./cmd/atelctl agent install
+atelctl agent join --join-token <PLAIN_TOKEN> --name node-1
+```
 
 ## 5. Verify
 
