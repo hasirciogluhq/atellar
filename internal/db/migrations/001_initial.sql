@@ -17,6 +17,9 @@ CREATE TYPE container_status AS ENUM (
     'running',      -- task started, PID available
     'stopped',      -- graceful stop
     'crashed',      -- exit_code != 0
+    'backoff',      -- waiting before retry
+    'failed',       -- max retries exceeded
+    'removed',      -- delete requested, agent cleanup pending
     'terminated'    -- deleted and cleaned up
 );
 
@@ -36,6 +39,14 @@ CREATE TABLE nodes (
     containerd_sock TEXT NOT NULL DEFAULT '/run/containerd/containerd.sock',
     token_hash TEXT DEFAULT NULL,
     token_expires_at TIMESTAMPTZ DEFAULT NULL,
+    cpu_cores INTEGER DEFAULT NULL,
+    memory_total_mib INTEGER DEFAULT NULL,
+    disk_total_gib INTEGER DEFAULT NULL,
+    hostname TEXT DEFAULT NULL,
+    os TEXT DEFAULT NULL,
+    arch TEXT DEFAULT NULL,
+    kernel_version TEXT DEFAULT NULL,
+    hardware_reported_at TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -99,8 +110,9 @@ exit_code INTEGER DEFAULT NULL,
 error_message TEXT DEFAULT NULL,
 -- number of restarts
 restart_count INTEGER NOT NULL DEFAULT 0,
-restart_policy TEXT NOT NULL DEFAULT 'no',
+restart_policy TEXT NOT NULL DEFAULT 'on-failure',
 -- no | always | on-failure
+last_failed_at TIMESTAMPTZ DEFAULT NULL,
 
 -- Timestamps
 created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),

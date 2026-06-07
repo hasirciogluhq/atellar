@@ -211,7 +211,7 @@ func (s *desiredState) buildRoutes() []RouteSpec {
 func containerNeedsRoute(status string) bool {
 	switch status {
 	case containerStatusScheduled, containerStatusPending, containerStatusPulling,
-		containerStatusCreating, containerStatusRunning:
+		containerStatusCreating, containerStatusRunning, containerStatusBackoff:
 		return true
 	default:
 		return false

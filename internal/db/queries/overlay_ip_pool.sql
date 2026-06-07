@@ -26,3 +26,19 @@ WHERE ip = $1;
 SELECT * FROM overlay_ip_pool
 WHERE node_id = $1
 ORDER BY ip;
+
+-- name: CountFreeOverlayIPsByNodeId :one
+SELECT COUNT(*)::int FROM overlay_ip_pool
+WHERE node_id = $1 AND container_id IS NULL;
+
+-- name: AllocateFirstFreeOverlayIP :one
+UPDATE overlay_ip_pool
+SET container_id = sqlc.arg(container_id), allocated_at = now()
+WHERE ip = (
+    SELECT p.ip FROM overlay_ip_pool AS p
+    WHERE p.node_id = sqlc.arg(node_id) AND p.container_id IS NULL
+    ORDER BY p.ip
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING *;

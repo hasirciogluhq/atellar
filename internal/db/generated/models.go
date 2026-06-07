@@ -72,6 +72,9 @@ const (
 	ContainerStatusRunning    ContainerStatus = "running"
 	ContainerStatusStopped    ContainerStatus = "stopped"
 	ContainerStatusCrashed    ContainerStatus = "crashed"
+	ContainerStatusBackoff    ContainerStatus = "backoff"
+	ContainerStatusFailed     ContainerStatus = "failed"
+	ContainerStatusRemoved    ContainerStatus = "removed"
 	ContainerStatusTerminated ContainerStatus = "terminated"
 )
 
@@ -180,6 +183,7 @@ type Container struct {
 	ErrorMessage   pgtype.Text
 	RestartCount   int32
 	RestartPolicy  string
+	LastFailedAt   pgtype.Timestamptz
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	ScheduledAt    pgtype.Timestamptz
@@ -198,20 +202,28 @@ type ContainerEvent struct {
 }
 
 type Node struct {
-	ID             string
-	Name           string
-	PublicIp       *netip.Addr
-	PrivateIp      *netip.Addr
-	OverlayIp      *netip.Addr
-	OverlaySubnet  *netip.Prefix
-	Status         NodeStatus
-	LastHeartbeat  pgtype.Timestamptz
-	AgentVersion   pgtype.Text
-	ContainerdSock string
-	TokenHash      pgtype.Text
-	TokenExpiresAt pgtype.Timestamptz
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	ID                 string
+	Name               string
+	PublicIp           *netip.Addr
+	PrivateIp          *netip.Addr
+	OverlayIp          *netip.Addr
+	OverlaySubnet      *netip.Prefix
+	Status             NodeStatus
+	LastHeartbeat      pgtype.Timestamptz
+	AgentVersion       pgtype.Text
+	ContainerdSock     string
+	TokenHash          pgtype.Text
+	TokenExpiresAt     pgtype.Timestamptz
+	CpuCores           pgtype.Int4
+	MemoryTotalMib     pgtype.Int4
+	DiskTotalGib       pgtype.Int4
+	Hostname           pgtype.Text
+	Os                 pgtype.Text
+	Arch               pgtype.Text
+	KernelVersion      pgtype.Text
+	HardwareReportedAt pgtype.Timestamptz
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
 }
 
 type NodeJoinToken struct {

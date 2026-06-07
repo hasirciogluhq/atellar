@@ -19,11 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_Connect_FullMethodName                = "/atellar.v1.AgentService/Connect"
-	AgentService_RenewNodeAPIKey_FullMethodName        = "/atellar.v1.AgentService/RenewNodeAPIKey"
-	AgentService_GetClusterNetworkState_FullMethodName = "/atellar.v1.AgentService/GetClusterNetworkState"
-	AgentService_GetNodeWorkloads_FullMethodName       = "/atellar.v1.AgentService/GetNodeWorkloads"
-	AgentService_ReportContainerRuntime_FullMethodName = "/atellar.v1.AgentService/ReportContainerRuntime"
+	AgentService_Connect_FullMethodName                    = "/atellar.v1.AgentService/Connect"
+	AgentService_RenewNodeAPIKey_FullMethodName            = "/atellar.v1.AgentService/RenewNodeAPIKey"
+	AgentService_GetClusterNetworkState_FullMethodName     = "/atellar.v1.AgentService/GetClusterNetworkState"
+	AgentService_GetNodeWorkloads_FullMethodName           = "/atellar.v1.AgentService/GetNodeWorkloads"
+	AgentService_ReportContainerRuntime_FullMethodName     = "/atellar.v1.AgentService/ReportContainerRuntime"
+	AgentService_AllocateContainerOverlayIP_FullMethodName = "/atellar.v1.AgentService/AllocateContainerOverlayIP"
+	AgentService_ReportNodeHardware_FullMethodName         = "/atellar.v1.AgentService/ReportNodeHardware"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -35,6 +37,8 @@ type AgentServiceClient interface {
 	GetClusterNetworkState(ctx context.Context, in *GetClusterNetworkStateRequest, opts ...grpc.CallOption) (*GetClusterNetworkStateResponse, error)
 	GetNodeWorkloads(ctx context.Context, in *GetNodeWorkloadsRequest, opts ...grpc.CallOption) (*GetNodeWorkloadsResponse, error)
 	ReportContainerRuntime(ctx context.Context, in *ReportContainerRuntimeRequest, opts ...grpc.CallOption) (*ReportContainerRuntimeResponse, error)
+	AllocateContainerOverlayIP(ctx context.Context, in *AllocateContainerOverlayIPRequest, opts ...grpc.CallOption) (*AllocateContainerOverlayIPResponse, error)
+	ReportNodeHardware(ctx context.Context, in *ReportNodeHardwareRequest, opts ...grpc.CallOption) (*ReportNodeHardwareResponse, error)
 }
 
 type agentServiceClient struct {
@@ -98,6 +102,26 @@ func (c *agentServiceClient) ReportContainerRuntime(ctx context.Context, in *Rep
 	return out, nil
 }
 
+func (c *agentServiceClient) AllocateContainerOverlayIP(ctx context.Context, in *AllocateContainerOverlayIPRequest, opts ...grpc.CallOption) (*AllocateContainerOverlayIPResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AllocateContainerOverlayIPResponse)
+	err := c.cc.Invoke(ctx, AgentService_AllocateContainerOverlayIP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ReportNodeHardware(ctx context.Context, in *ReportNodeHardwareRequest, opts ...grpc.CallOption) (*ReportNodeHardwareResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportNodeHardwareResponse)
+	err := c.cc.Invoke(ctx, AgentService_ReportNodeHardware_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -107,6 +131,8 @@ type AgentServiceServer interface {
 	GetClusterNetworkState(context.Context, *GetClusterNetworkStateRequest) (*GetClusterNetworkStateResponse, error)
 	GetNodeWorkloads(context.Context, *GetNodeWorkloadsRequest) (*GetNodeWorkloadsResponse, error)
 	ReportContainerRuntime(context.Context, *ReportContainerRuntimeRequest) (*ReportContainerRuntimeResponse, error)
+	AllocateContainerOverlayIP(context.Context, *AllocateContainerOverlayIPRequest) (*AllocateContainerOverlayIPResponse, error)
+	ReportNodeHardware(context.Context, *ReportNodeHardwareRequest) (*ReportNodeHardwareResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -131,6 +157,12 @@ func (UnimplementedAgentServiceServer) GetNodeWorkloads(context.Context, *GetNod
 }
 func (UnimplementedAgentServiceServer) ReportContainerRuntime(context.Context, *ReportContainerRuntimeRequest) (*ReportContainerRuntimeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportContainerRuntime not implemented")
+}
+func (UnimplementedAgentServiceServer) AllocateContainerOverlayIP(context.Context, *AllocateContainerOverlayIPRequest) (*AllocateContainerOverlayIPResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AllocateContainerOverlayIP not implemented")
+}
+func (UnimplementedAgentServiceServer) ReportNodeHardware(context.Context, *ReportNodeHardwareRequest) (*ReportNodeHardwareResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportNodeHardware not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -232,6 +264,42 @@ func _AgentService_ReportContainerRuntime_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_AllocateContainerOverlayIP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AllocateContainerOverlayIPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).AllocateContainerOverlayIP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_AllocateContainerOverlayIP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).AllocateContainerOverlayIP(ctx, req.(*AllocateContainerOverlayIPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ReportNodeHardware_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportNodeHardwareRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ReportNodeHardware(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ReportNodeHardware_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ReportNodeHardware(ctx, req.(*ReportNodeHardwareRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -254,6 +322,14 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportContainerRuntime",
 			Handler:    _AgentService_ReportContainerRuntime_Handler,
+		},
+		{
+			MethodName: "AllocateContainerOverlayIP",
+			Handler:    _AgentService_AllocateContainerOverlayIP_Handler,
+		},
+		{
+			MethodName: "ReportNodeHardware",
+			Handler:    _AgentService_ReportNodeHardware_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

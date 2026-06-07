@@ -19,6 +19,9 @@ const (
 	PeerEventContainerStopped    = "container.stopped"
 	PeerEventContainerTerminated = "container.terminated"
 	PeerEventContainerUpdated    = "container.updated"
+
+	WorkloadEventDispatch = "workload.dispatch"
+	WorkloadEventRemoved  = "workload.removed"
 )
 
 type nodePeerEventPayload struct {
@@ -40,6 +43,12 @@ type containerPeerEventPayload struct {
 	OverlayIP   string `json:"overlay_ip,omitempty"`
 	Status      string `json:"status,omitempty"`
 	Image       string `json:"image,omitempty"`
+}
+
+type workloadDispatchPayload struct {
+	Event       string `json:"event"`
+	ContainerID string `json:"container_id"`
+	NodeID      string `json:"node_id"`
 }
 
 func (r *Registry) sendReconcileEvent(correlationID string, payload []byte, excludeNodeID string) int {
@@ -110,6 +119,56 @@ func (r *Registry) NotifyNodeUpdated(updatedNode node.NodeEntity, previousOverla
 		previousOverlayIP,
 		previousOverlaySubnet,
 	)
+}
+
+func (r *Registry) sendToNode(nodeID, correlationID string, payload []byte) bool {
+	envelope := &atellarv1.ServerEnvelope{
+		CorrelationId: correlationID,
+		Payload: &atellarv1.ServerEnvelope_RpcCall{
+			RpcCall: &atellarv1.RpcCall{
+				Method:  reconcileTriggerMethod,
+				Payload: payload,
+				Mode:    atellarv1.DeliveryMode_DELIVERY_MODE_ASYNC,
+			},
+		},
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	connection, ok := r.connections[nodeID]
+	if !ok {
+		return false
+	}
+	if err := connection.Send(envelope); err != nil {
+		log.Printf("workload event send to %s failed: %v", nodeID, err)
+		return false
+	}
+	return true
+}
+
+func (r *Registry) NotifyWorkloadDispatch(target container.Entity) bool {
+	payload, err := json.Marshal(workloadDispatchPayload{
+		Event:       WorkloadEventDispatch,
+		ContainerID: target.ID,
+		NodeID:      target.NodeID,
+	})
+	if err != nil {
+		return false
+	}
+	return r.sendToNode(target.NodeID, WorkloadEventDispatch+"-"+target.ID, payload)
+}
+
+func (r *Registry) NotifyWorkloadRemoved(target container.Entity) bool {
+	payload, err := json.Marshal(workloadDispatchPayload{
+		Event:       WorkloadEventRemoved,
+		ContainerID: target.ID,
+		NodeID:      target.NodeID,
+	})
+	if err != nil {
+		return false
+	}
+	return r.sendToNode(target.NodeID, WorkloadEventRemoved+"-"+target.ID, payload)
 }
 
 func (r *Registry) NotifyContainerEvent(event string, target container.Entity) int {

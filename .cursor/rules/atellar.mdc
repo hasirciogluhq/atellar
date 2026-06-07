@@ -30,13 +30,15 @@ pkg/client       global HTTP API client (extend stub; no internal/client/control
 
 **Never** put node network code under `pkg/` or a generic `internal/pkg/`. Future: `internal/agent/netns`, `internal/agent/vmnet`.
 
-## Transport split
+## Transport split (never ask again)
 
 | Component | Transport |
 |-----------|-----------|
-| `atellar-agent` | gRPC only to control plane |
-| `atelctl`, plugins | HTTP via `pkg/client.AtellarClient` |
+| `atellar-agent` | **gRPC only** to control plane — never HTTP |
+| `atelctl`, `pkg/client` | **HTTP only** via `pkg/client.AtellarClient` |
 | Control plane | HTTP `:8080` + gRPC `:9090` |
+
+Deploy/delete containers: HTTP `POST/DELETE /api/v1/containers` via `pkg/client`. Agent uses gRPC: `GetNodeWorkloads`, `ReportContainerRuntime`, `AllocateContainerOverlayIP`, `ReportNodeHardware`.
 
 ## pkg/client
 
@@ -88,7 +90,11 @@ Validation: `client.ControlPlane.Validate()` + `agent.ValidateJoinOptions()`.
 ## Agent
 
 - Reads only `/etc/atellar/agent.json`. No env vars.
-- Dumb node worker: config + gRPC stream + overlay reconcile + containerd (no orchestration decisions).
+- Dumb node worker: config + gRPC stream + overlay reconcile + containerd runtime.
+- `containerd_ns` is always internal default **`atellar`** — not exposed in API.
+- Workload sync: push (`workload.dispatch` / `workload.removed`) + 15s poll `GetNodeWorkloads`.
+- Reports every lifecycle step via gRPC `ReportContainerRuntime`. Overlay IP via `AllocateContainerOverlayIP` after create, before start.
+- Hardware: `ReportNodeHardware` on start + every 10 minutes.
 - Config is filled by **`atelctl agent join`** (or install `--auto-join`), not by install alone.
 
 ## Docs

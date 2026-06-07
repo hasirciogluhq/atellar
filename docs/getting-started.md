@@ -85,16 +85,23 @@ On successful connection, API logs show `agent connected node_id=...`.
 
 ## 7. Create container (optional)
 
+Scheduler picks a node automatically — no `node_id` in request body.
+
 ```bash
 curl -X POST http://localhost:8080/api/v1/containers \
   -H "Content-Type: application/json" \
   -d '{
-    "node_id": "<NODE_ID>",
     "image": "docker.io/library/nginx:alpine"
   }'
 ```
 
-Peer nodes receive a `container.scheduled` event.
+Target node receives `workload.dispatch`; peer nodes receive `container.scheduled` for overlay routes.
+
+Delete:
+
+```bash
+curl -X DELETE http://localhost:8080/api/v1/containers/<CONTAINER_ID>
+```
 
 ## Adding a second node
 

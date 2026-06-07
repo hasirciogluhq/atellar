@@ -28,6 +28,14 @@ type NodeEntity struct {
 	LastHeartbeat  *time.Time `json:"last_heartbeat,omitempty"`
 	AgentVersion   *string    `json:"agent_version,omitempty"`
 	ContainerdSock string     `json:"containerd_sock"`
+	CpuCores       *int32     `json:"cpu_cores,omitempty"`
+	MemoryTotalMiB *int32     `json:"memory_total_mib,omitempty"`
+	DiskTotalGiB   *int32     `json:"disk_total_gib,omitempty"`
+	Hostname       *string    `json:"hostname,omitempty"`
+	OS             *string    `json:"os,omitempty"`
+	Arch           *string    `json:"arch,omitempty"`
+	KernelVersion  *string    `json:"kernel_version,omitempty"`
+	HardwareReportedAt *time.Time `json:"hardware_reported_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }

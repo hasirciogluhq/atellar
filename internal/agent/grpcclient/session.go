@@ -21,12 +21,17 @@ type networkReconciler interface {
 	HandlePeerEvent(event overlay.PeerEvent)
 }
 
+type workloadTrigger interface {
+	Trigger()
+}
+
 type Session struct {
 	cfg        *config.Config
 	configPath string
 	conn       *grpc.ClientConn
 	client     atellarv1.AgentServiceClient
 	network    networkReconciler
+	workloads  workloadTrigger
 }
 
 func NewSession(cfg *config.Config, configPath string, network networkReconciler) (*Session, error) {
@@ -53,6 +58,14 @@ func (s *Session) Close() error {
 
 func (s *Session) SetNetworkReconciler(network networkReconciler) {
 	s.network = network
+}
+
+func (s *Session) SetWorkloadTrigger(workloads workloadTrigger) {
+	s.workloads = workloads
+}
+
+func (s *Session) GRPCClient() atellarv1.AgentServiceClient {
+	return s.client
 }
 
 func (s *Session) Run(ctx context.Context, heartbeatEvery time.Duration) error {
@@ -142,8 +155,16 @@ func (s *Session) handleRpcCall(call *atellarv1.RpcCall) {
 			payload.OverlaySubnet,
 		)
 
-		if s.network != nil {
-			s.network.HandlePeerEvent(payload)
+		switch payload.Event {
+		case "workload.dispatch", "workload.removed":
+			log.Printf("reconcile.trigger workload event=%s container_id=%s", payload.Event, payload.ContainerID)
+			if s.workloads != nil {
+				s.workloads.Trigger()
+			}
+		default:
+			if s.network != nil {
+				s.network.HandlePeerEvent(payload)
+			}
 		}
 	default:
 		log.Printf("unhandled rpc call method=%s", call.GetMethod())

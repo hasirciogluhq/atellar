@@ -12,6 +12,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countRunningContainersByNodeId = `-- name: CountRunningContainersByNodeId :one
+SELECT COUNT(*)::int FROM containers
+WHERE node_id = $1
+  AND status IN ('pending', 'scheduled', 'pulling', 'creating', 'running', 'backoff')
+`
+
+func (q *Queries) CountRunningContainersByNodeId(ctx context.Context, nodeID string) (int32, error) {
+	row := q.db.QueryRow(ctx, countRunningContainersByNodeId, nodeID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createContainer = `-- name: CreateContainer :one
 INSERT INTO containers (
     id,
@@ -25,10 +38,11 @@ INSERT INTO containers (
     cpu_shares,
     memory_limit_mib,
     restart_policy,
-    containerd_ns
+    containerd_ns,
+    status
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, created_at, updated_at, scheduled_at, started_at, stopped_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+RETURNING id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, last_failed_at, created_at, updated_at, scheduled_at, started_at, stopped_at
 `
 
 type CreateContainerParams struct {
@@ -44,6 +58,7 @@ type CreateContainerParams struct {
 	MemoryLimitMib pgtype.Int4
 	RestartPolicy  string
 	ContainerdNs   string
+	Status         ContainerStatus
 }
 
 func (q *Queries) CreateContainer(ctx context.Context, arg CreateContainerParams) (Container, error) {
@@ -60,6 +75,7 @@ func (q *Queries) CreateContainer(ctx context.Context, arg CreateContainerParams
 		arg.MemoryLimitMib,
 		arg.RestartPolicy,
 		arg.ContainerdNs,
+		arg.Status,
 	)
 	var i Container
 	err := row.Scan(
@@ -85,6 +101,7 @@ func (q *Queries) CreateContainer(ctx context.Context, arg CreateContainerParams
 		&i.ErrorMessage,
 		&i.RestartCount,
 		&i.RestartPolicy,
+		&i.LastFailedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ScheduledAt,
@@ -95,7 +112,7 @@ func (q *Queries) CreateContainer(ctx context.Context, arg CreateContainerParams
 }
 
 const getContainerById = `-- name: GetContainerById :one
-SELECT id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, created_at, updated_at, scheduled_at, started_at, stopped_at FROM containers WHERE id = $1
+SELECT id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, last_failed_at, created_at, updated_at, scheduled_at, started_at, stopped_at FROM containers WHERE id = $1
 `
 
 func (q *Queries) GetContainerById(ctx context.Context, id string) (Container, error) {
@@ -124,6 +141,7 @@ func (q *Queries) GetContainerById(ctx context.Context, id string) (Container, e
 		&i.ErrorMessage,
 		&i.RestartCount,
 		&i.RestartPolicy,
+		&i.LastFailedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ScheduledAt,
@@ -133,8 +151,29 @@ func (q *Queries) GetContainerById(ctx context.Context, id string) (Container, e
 	return i, err
 }
 
+const hasContainerWithImageOnNode = `-- name: HasContainerWithImageOnNode :one
+SELECT EXISTS(
+    SELECT 1 FROM containers
+    WHERE node_id = $1
+      AND image = $2
+      AND status IN ('pending', 'scheduled', 'pulling', 'creating', 'running', 'backoff')
+) AS exists
+`
+
+type HasContainerWithImageOnNodeParams struct {
+	NodeID string
+	Image  string
+}
+
+func (q *Queries) HasContainerWithImageOnNode(ctx context.Context, arg HasContainerWithImageOnNodeParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasContainerWithImageOnNode, arg.NodeID, arg.Image)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listContainers = `-- name: ListContainers :many
-SELECT id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, created_at, updated_at, scheduled_at, started_at, stopped_at FROM containers ORDER BY created_at DESC
+SELECT id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, last_failed_at, created_at, updated_at, scheduled_at, started_at, stopped_at FROM containers ORDER BY created_at DESC
 `
 
 func (q *Queries) ListContainers(ctx context.Context) ([]Container, error) {
@@ -169,6 +208,7 @@ func (q *Queries) ListContainers(ctx context.Context) ([]Container, error) {
 			&i.ErrorMessage,
 			&i.RestartCount,
 			&i.RestartPolicy,
+			&i.LastFailedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ScheduledAt,
@@ -186,7 +226,7 @@ func (q *Queries) ListContainers(ctx context.Context) ([]Container, error) {
 }
 
 const listContainersByNodeId = `-- name: ListContainersByNodeId :many
-SELECT id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, created_at, updated_at, scheduled_at, started_at, stopped_at FROM containers WHERE node_id = $1 ORDER BY created_at DESC
+SELECT id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, last_failed_at, created_at, updated_at, scheduled_at, started_at, stopped_at FROM containers WHERE node_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListContainersByNodeId(ctx context.Context, nodeID string) ([]Container, error) {
@@ -221,6 +261,7 @@ func (q *Queries) ListContainersByNodeId(ctx context.Context, nodeID string) ([]
 			&i.ErrorMessage,
 			&i.RestartCount,
 			&i.RestartPolicy,
+			&i.LastFailedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ScheduledAt,
@@ -237,6 +278,172 @@ func (q *Queries) ListContainersByNodeId(ctx context.Context, nodeID string) ([]
 	return items, nil
 }
 
+const listWorkloadsByNodeId = `-- name: ListWorkloadsByNodeId :many
+SELECT id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, last_failed_at, created_at, updated_at, scheduled_at, started_at, stopped_at FROM containers
+WHERE node_id = $1
+  AND status IN (
+    'pending', 'scheduled', 'pulling', 'creating', 'running',
+    'stopped', 'crashed', 'backoff', 'failed', 'removed'
+  )
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListWorkloadsByNodeId(ctx context.Context, nodeID string) ([]Container, error) {
+	rows, err := q.db.Query(ctx, listWorkloadsByNodeId, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Container
+	for rows.Next() {
+		var i Container
+		if err := rows.Scan(
+			&i.ID,
+			&i.NodeID,
+			&i.ContainerdNs,
+			&i.ContainerdID,
+			&i.SnapshotKey,
+			&i.TaskPid,
+			&i.Image,
+			&i.ImageDigest,
+			&i.Command,
+			&i.Entrypoint,
+			&i.Env,
+			&i.WorkingDir,
+			&i.OverlayIp,
+			&i.ExposedPorts,
+			&i.CpuLimit,
+			&i.CpuShares,
+			&i.MemoryLimitMib,
+			&i.Status,
+			&i.ExitCode,
+			&i.ErrorMessage,
+			&i.RestartCount,
+			&i.RestartPolicy,
+			&i.LastFailedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ScheduledAt,
+			&i.StartedAt,
+			&i.StoppedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markContainerRemoved = `-- name: MarkContainerRemoved :one
+UPDATE containers
+SET status = 'removed', updated_at = now()
+WHERE id = $1
+RETURNING id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, last_failed_at, created_at, updated_at, scheduled_at, started_at, stopped_at
+`
+
+func (q *Queries) MarkContainerRemoved(ctx context.Context, id string) (Container, error) {
+	row := q.db.QueryRow(ctx, markContainerRemoved, id)
+	var i Container
+	err := row.Scan(
+		&i.ID,
+		&i.NodeID,
+		&i.ContainerdNs,
+		&i.ContainerdID,
+		&i.SnapshotKey,
+		&i.TaskPid,
+		&i.Image,
+		&i.ImageDigest,
+		&i.Command,
+		&i.Entrypoint,
+		&i.Env,
+		&i.WorkingDir,
+		&i.OverlayIp,
+		&i.ExposedPorts,
+		&i.CpuLimit,
+		&i.CpuShares,
+		&i.MemoryLimitMib,
+		&i.Status,
+		&i.ExitCode,
+		&i.ErrorMessage,
+		&i.RestartCount,
+		&i.RestartPolicy,
+		&i.LastFailedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ScheduledAt,
+		&i.StartedAt,
+		&i.StoppedAt,
+	)
+	return i, err
+}
+
+const scheduleContainer = `-- name: ScheduleContainer :one
+UPDATE containers
+SET status = 'scheduled', scheduled_at = now(), updated_at = now()
+WHERE id = $1
+RETURNING id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, last_failed_at, created_at, updated_at, scheduled_at, started_at, stopped_at
+`
+
+func (q *Queries) ScheduleContainer(ctx context.Context, id string) (Container, error) {
+	row := q.db.QueryRow(ctx, scheduleContainer, id)
+	var i Container
+	err := row.Scan(
+		&i.ID,
+		&i.NodeID,
+		&i.ContainerdNs,
+		&i.ContainerdID,
+		&i.SnapshotKey,
+		&i.TaskPid,
+		&i.Image,
+		&i.ImageDigest,
+		&i.Command,
+		&i.Entrypoint,
+		&i.Env,
+		&i.WorkingDir,
+		&i.OverlayIp,
+		&i.ExposedPorts,
+		&i.CpuLimit,
+		&i.CpuShares,
+		&i.MemoryLimitMib,
+		&i.Status,
+		&i.ExitCode,
+		&i.ErrorMessage,
+		&i.RestartCount,
+		&i.RestartPolicy,
+		&i.LastFailedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ScheduledAt,
+		&i.StartedAt,
+		&i.StoppedAt,
+	)
+	return i, err
+}
+
+const sumContainerResourcesByNodeId = `-- name: SumContainerResourcesByNodeId :one
+SELECT
+    COALESCE(SUM(cpu_limit), 0)::numeric AS total_cpu,
+    COALESCE(SUM(memory_limit_mib), 0)::int AS total_memory_mib
+FROM containers
+WHERE node_id = $1
+  AND status IN ('pending', 'scheduled', 'pulling', 'creating', 'running', 'backoff')
+`
+
+type SumContainerResourcesByNodeIdRow struct {
+	TotalCpu       pgtype.Numeric
+	TotalMemoryMib int32
+}
+
+func (q *Queries) SumContainerResourcesByNodeId(ctx context.Context, nodeID string) (SumContainerResourcesByNodeIdRow, error) {
+	row := q.db.QueryRow(ctx, sumContainerResourcesByNodeId, nodeID)
+	var i SumContainerResourcesByNodeIdRow
+	err := row.Scan(&i.TotalCpu, &i.TotalMemoryMib)
+	return i, err
+}
+
 const updateContainerRuntime = `-- name: UpdateContainerRuntime :one
 UPDATE containers
 SET
@@ -249,12 +456,13 @@ SET
     exit_code = $8,
     error_message = $9,
     restart_count = $10,
-    scheduled_at = COALESCE($11, scheduled_at),
-    started_at = COALESCE($12, started_at),
-    stopped_at = COALESCE($13, stopped_at),
+    last_failed_at = COALESCE($11, last_failed_at),
+    scheduled_at = COALESCE($12, scheduled_at),
+    started_at = COALESCE($13, started_at),
+    stopped_at = COALESCE($14, stopped_at),
     updated_at = now()
 WHERE id = $1
-RETURNING id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, created_at, updated_at, scheduled_at, started_at, stopped_at
+RETURNING id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, last_failed_at, created_at, updated_at, scheduled_at, started_at, stopped_at
 `
 
 type UpdateContainerRuntimeParams struct {
@@ -268,6 +476,7 @@ type UpdateContainerRuntimeParams struct {
 	ExitCode     pgtype.Int4
 	ErrorMessage pgtype.Text
 	RestartCount int32
+	LastFailedAt pgtype.Timestamptz
 	ScheduledAt  pgtype.Timestamptz
 	StartedAt    pgtype.Timestamptz
 	StoppedAt    pgtype.Timestamptz
@@ -285,6 +494,7 @@ func (q *Queries) UpdateContainerRuntime(ctx context.Context, arg UpdateContaine
 		arg.ExitCode,
 		arg.ErrorMessage,
 		arg.RestartCount,
+		arg.LastFailedAt,
 		arg.ScheduledAt,
 		arg.StartedAt,
 		arg.StoppedAt,
@@ -313,6 +523,7 @@ func (q *Queries) UpdateContainerRuntime(ctx context.Context, arg UpdateContaine
 		&i.ErrorMessage,
 		&i.RestartCount,
 		&i.RestartPolicy,
+		&i.LastFailedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ScheduledAt,
@@ -326,7 +537,7 @@ const updateContainerStatus = `-- name: UpdateContainerStatus :one
 UPDATE containers
 SET status = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, created_at, updated_at, scheduled_at, started_at, stopped_at
+RETURNING id, node_id, containerd_ns, containerd_id, snapshot_key, task_pid, image, image_digest, command, entrypoint, env, working_dir, overlay_ip, exposed_ports, cpu_limit, cpu_shares, memory_limit_mib, status, exit_code, error_message, restart_count, restart_policy, last_failed_at, created_at, updated_at, scheduled_at, started_at, stopped_at
 `
 
 type UpdateContainerStatusParams struct {
@@ -360,6 +571,7 @@ func (q *Queries) UpdateContainerStatus(ctx context.Context, arg UpdateContainer
 		&i.ErrorMessage,
 		&i.RestartCount,
 		&i.RestartPolicy,
+		&i.LastFailedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ScheduledAt,

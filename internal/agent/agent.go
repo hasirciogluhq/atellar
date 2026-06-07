@@ -11,7 +11,9 @@ import (
 
 	"github.com/hasirciogluhq/atellar/internal/agent/config"
 	"github.com/hasirciogluhq/atellar/internal/agent/grpcclient"
+	"github.com/hasirciogluhq/atellar/internal/agent/hardware"
 	"github.com/hasirciogluhq/atellar/internal/agent/overlay"
+	"github.com/hasirciogluhq/atellar/internal/agent/runtime"
 )
 
 func Run() error {
@@ -31,6 +33,8 @@ func Run() error {
 	}
 	defer session.Close()
 
+	cpClient := runtime.NewCPClient(session.GRPCClient(), cfg.NodeAPIKey)
+
 	netManager, err := overlay.NewManager(overlay.ManagerConfig{
 		NodeID:            cfg.NodeID,
 		BridgeName:        cfg.ResolveBridgeName(),
@@ -42,12 +46,25 @@ func Run() error {
 		return fmt.Errorf("overlay network manager: %w", err)
 	}
 
+	workloadManager := runtime.NewManager(
+		cfg.NodeID,
+		cfg.ContainerdSock,
+		cfg.ResolveBridgeName(),
+		session.GRPCClient(),
+		cfg.NodeAPIKey,
+	)
+
 	session.SetNetworkReconciler(netManager)
+	session.SetWorkloadTrigger(workloadManager)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	go netManager.Run(ctx)
+	go workloadManager.Run(ctx)
+
+	hwReporter := hardware.NewReporter(session.GRPCClient(), cpClient.ReportHardware)
+	go hwReporter.Run(ctx)
 
 	log.Printf("atellar agent started node_id=%s grpc=%s bridge=%s config=%s",
 		cfg.NodeID, cfg.ResolveGrpcAddr(), cfg.ResolveBridgeName(), config.SystemConfigPath)

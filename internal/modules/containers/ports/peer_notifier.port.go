@@ -8,4 +8,6 @@ import (
 
 type PeerNotifier interface {
 	NotifyContainerEvent(ctx context.Context, event string, target container.Entity) error
+	DispatchWorkload(ctx context.Context, target container.Entity) error
+	RemoveWorkload(ctx context.Context, target container.Entity) error
 }

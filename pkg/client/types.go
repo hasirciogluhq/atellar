@@ -41,3 +41,15 @@ type Container struct {
 	Status    string `json:"status"`
 	OverlayIP string `json:"overlay_ip,omitempty"`
 }
+
+type CreateContainerRequest struct {
+	Image          string            `json:"image"`
+	Command        []string          `json:"command,omitempty"`
+	Entrypoint     []string          `json:"entrypoint,omitempty"`
+	Env            map[string]string `json:"env,omitempty"`
+	WorkingDir     *string           `json:"working_dir,omitempty"`
+	CpuLimit       *float64          `json:"cpu_limit,omitempty"`
+	CpuShares      *int32            `json:"cpu_shares,omitempty"`
+	MemoryLimitMiB *int32            `json:"memory_limit_mib,omitempty"`
+	RestartPolicy  string            `json:"restart_policy,omitempty"`
+}

@@ -47,3 +47,19 @@ func (n *PeerNotifier) NotifyContainerEvent(ctx context.Context, event string, t
 	log.Printf("%s notified peers=%d container_id=%s node_id=%s", event, notified, target.ID, target.NodeID)
 	return nil
 }
+
+func (n *PeerNotifier) DispatchWorkload(ctx context.Context, target container.Entity) error {
+	_ = ctx
+	if n.registry.NotifyWorkloadDispatch(target) {
+		log.Printf("%s dispatched container_id=%s node_id=%s", WorkloadEventDispatch, target.ID, target.NodeID)
+	}
+	return nil
+}
+
+func (n *PeerNotifier) RemoveWorkload(ctx context.Context, target container.Entity) error {
+	_ = ctx
+	if n.registry.NotifyWorkloadRemoved(target) {
+		log.Printf("%s dispatched container_id=%s node_id=%s", WorkloadEventRemoved, target.ID, target.NodeID)
+	}
+	return nil
+}

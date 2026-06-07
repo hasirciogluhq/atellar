@@ -59,7 +59,7 @@ func (q *Queries) CreateJoinToken(ctx context.Context, arg CreateJoinTokenParams
 const createNode = `-- name: CreateNode :one
 INSERT INTO nodes (id, name, public_ip, private_ip, agent_version, containerd_sock, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at
+RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, cpu_cores, memory_total_mib, disk_total_gib, hostname, os, arch, kernel_version, hardware_reported_at, created_at, updated_at
 `
 
 type CreateNodeParams struct {
@@ -96,6 +96,14 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, e
 		&i.ContainerdSock,
 		&i.TokenHash,
 		&i.TokenExpiresAt,
+		&i.CpuCores,
+		&i.MemoryTotalMib,
+		&i.DiskTotalGib,
+		&i.Hostname,
+		&i.Os,
+		&i.Arch,
+		&i.KernelVersion,
+		&i.HardwareReportedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -106,7 +114,7 @@ const evictNode = `-- name: EvictNode :one
 UPDATE nodes
 SET status = 'evicted', updated_at = now()
 WHERE id = $1
-RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at
+RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, cpu_cores, memory_total_mib, disk_total_gib, hostname, os, arch, kernel_version, hardware_reported_at, created_at, updated_at
 `
 
 func (q *Queries) EvictNode(ctx context.Context, id string) (Node, error) {
@@ -125,6 +133,14 @@ func (q *Queries) EvictNode(ctx context.Context, id string) (Node, error) {
 		&i.ContainerdSock,
 		&i.TokenHash,
 		&i.TokenExpiresAt,
+		&i.CpuCores,
+		&i.MemoryTotalMib,
+		&i.DiskTotalGib,
+		&i.Hostname,
+		&i.Os,
+		&i.Arch,
+		&i.KernelVersion,
+		&i.HardwareReportedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -151,7 +167,7 @@ func (q *Queries) GetJoinTokenByHash(ctx context.Context, tokenHash string) (Nod
 }
 
 const getNodeById = `-- name: GetNodeById :one
-SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at FROM nodes WHERE id = $1
+SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, cpu_cores, memory_total_mib, disk_total_gib, hostname, os, arch, kernel_version, hardware_reported_at, created_at, updated_at FROM nodes WHERE id = $1
 `
 
 func (q *Queries) GetNodeById(ctx context.Context, id string) (Node, error) {
@@ -170,6 +186,14 @@ func (q *Queries) GetNodeById(ctx context.Context, id string) (Node, error) {
 		&i.ContainerdSock,
 		&i.TokenHash,
 		&i.TokenExpiresAt,
+		&i.CpuCores,
+		&i.MemoryTotalMib,
+		&i.DiskTotalGib,
+		&i.Hostname,
+		&i.Os,
+		&i.Arch,
+		&i.KernelVersion,
+		&i.HardwareReportedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -177,7 +201,7 @@ func (q *Queries) GetNodeById(ctx context.Context, id string) (Node, error) {
 }
 
 const getNodeByName = `-- name: GetNodeByName :one
-SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at FROM nodes WHERE name = $1
+SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, cpu_cores, memory_total_mib, disk_total_gib, hostname, os, arch, kernel_version, hardware_reported_at, created_at, updated_at FROM nodes WHERE name = $1
 `
 
 func (q *Queries) GetNodeByName(ctx context.Context, name string) (Node, error) {
@@ -196,6 +220,14 @@ func (q *Queries) GetNodeByName(ctx context.Context, name string) (Node, error) 
 		&i.ContainerdSock,
 		&i.TokenHash,
 		&i.TokenExpiresAt,
+		&i.CpuCores,
+		&i.MemoryTotalMib,
+		&i.DiskTotalGib,
+		&i.Hostname,
+		&i.Os,
+		&i.Arch,
+		&i.KernelVersion,
+		&i.HardwareReportedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -203,7 +235,7 @@ func (q *Queries) GetNodeByName(ctx context.Context, name string) (Node, error) 
 }
 
 const getNodeByTokenHash = `-- name: GetNodeByTokenHash :one
-SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at FROM nodes
+SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, cpu_cores, memory_total_mib, disk_total_gib, hostname, os, arch, kernel_version, hardware_reported_at, created_at, updated_at FROM nodes
 WHERE token_hash = $1
   AND token_expires_at IS NOT NULL
   AND token_expires_at > now()
@@ -225,6 +257,14 @@ func (q *Queries) GetNodeByTokenHash(ctx context.Context, tokenHash pgtype.Text)
 		&i.ContainerdSock,
 		&i.TokenHash,
 		&i.TokenExpiresAt,
+		&i.CpuCores,
+		&i.MemoryTotalMib,
+		&i.DiskTotalGib,
+		&i.Hostname,
+		&i.Os,
+		&i.Arch,
+		&i.KernelVersion,
+		&i.HardwareReportedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -314,7 +354,7 @@ func (q *Queries) ListNodeOverlaySubnets(ctx context.Context) ([]string, error) 
 }
 
 const listNodes = `-- name: ListNodes :many
-SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at FROM nodes ORDER BY created_at DESC
+SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, cpu_cores, memory_total_mib, disk_total_gib, hostname, os, arch, kernel_version, hardware_reported_at, created_at, updated_at FROM nodes ORDER BY created_at DESC
 `
 
 func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
@@ -339,6 +379,14 @@ func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
 			&i.ContainerdSock,
 			&i.TokenHash,
 			&i.TokenExpiresAt,
+			&i.CpuCores,
+			&i.MemoryTotalMib,
+			&i.DiskTotalGib,
+			&i.Hostname,
+			&i.Os,
+			&i.Arch,
+			&i.KernelVersion,
+			&i.HardwareReportedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -384,6 +432,58 @@ func (q *Queries) ListReclaimableOverlayNetworks(ctx context.Context) ([]ListRec
 	return items, nil
 }
 
+const listSchedulableNodes = `-- name: ListSchedulableNodes :many
+SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, cpu_cores, memory_total_mib, disk_total_gib, hostname, os, arch, kernel_version, hardware_reported_at, created_at, updated_at FROM nodes
+WHERE status = 'ready'
+  AND hardware_reported_at IS NOT NULL
+  AND cpu_cores IS NOT NULL
+  AND memory_total_mib IS NOT NULL
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListSchedulableNodes(ctx context.Context) ([]Node, error) {
+	rows, err := q.db.Query(ctx, listSchedulableNodes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Node
+	for rows.Next() {
+		var i Node
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.PublicIp,
+			&i.PrivateIp,
+			&i.OverlayIp,
+			&i.OverlaySubnet,
+			&i.Status,
+			&i.LastHeartbeat,
+			&i.AgentVersion,
+			&i.ContainerdSock,
+			&i.TokenHash,
+			&i.TokenExpiresAt,
+			&i.CpuCores,
+			&i.MemoryTotalMib,
+			&i.DiskTotalGib,
+			&i.Hostname,
+			&i.Os,
+			&i.Arch,
+			&i.KernelVersion,
+			&i.HardwareReportedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markJoinTokenUsed = `-- name: MarkJoinTokenUsed :exec
 UPDATE node_join_tokens
 SET used_at = now(), used_by = $2
@@ -398,6 +498,72 @@ type MarkJoinTokenUsedParams struct {
 func (q *Queries) MarkJoinTokenUsed(ctx context.Context, arg MarkJoinTokenUsedParams) error {
 	_, err := q.db.Exec(ctx, markJoinTokenUsed, arg.ID, arg.UsedBy)
 	return err
+}
+
+const updateNodeHardware = `-- name: UpdateNodeHardware :one
+UPDATE nodes
+SET
+    cpu_cores = $2,
+    memory_total_mib = $3,
+    disk_total_gib = $4,
+    hostname = $5,
+    os = $6,
+    arch = $7,
+    kernel_version = $8,
+    hardware_reported_at = now(),
+    updated_at = now()
+WHERE id = $1
+RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, cpu_cores, memory_total_mib, disk_total_gib, hostname, os, arch, kernel_version, hardware_reported_at, created_at, updated_at
+`
+
+type UpdateNodeHardwareParams struct {
+	ID             string
+	CpuCores       pgtype.Int4
+	MemoryTotalMib pgtype.Int4
+	DiskTotalGib   pgtype.Int4
+	Hostname       pgtype.Text
+	Os             pgtype.Text
+	Arch           pgtype.Text
+	KernelVersion  pgtype.Text
+}
+
+func (q *Queries) UpdateNodeHardware(ctx context.Context, arg UpdateNodeHardwareParams) (Node, error) {
+	row := q.db.QueryRow(ctx, updateNodeHardware,
+		arg.ID,
+		arg.CpuCores,
+		arg.MemoryTotalMib,
+		arg.DiskTotalGib,
+		arg.Hostname,
+		arg.Os,
+		arg.Arch,
+		arg.KernelVersion,
+	)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PublicIp,
+		&i.PrivateIp,
+		&i.OverlayIp,
+		&i.OverlaySubnet,
+		&i.Status,
+		&i.LastHeartbeat,
+		&i.AgentVersion,
+		&i.ContainerdSock,
+		&i.TokenHash,
+		&i.TokenExpiresAt,
+		&i.CpuCores,
+		&i.MemoryTotalMib,
+		&i.DiskTotalGib,
+		&i.Hostname,
+		&i.Os,
+		&i.Arch,
+		&i.KernelVersion,
+		&i.HardwareReportedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateNodeHeartbeat = `-- name: UpdateNodeHeartbeat :exec
@@ -417,7 +583,7 @@ SET
     status = $4,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at
+RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, cpu_cores, memory_total_mib, disk_total_gib, hostname, os, arch, kernel_version, hardware_reported_at, created_at, updated_at
 `
 
 type UpdateNodeOverlayNetworkParams struct {
@@ -448,6 +614,14 @@ func (q *Queries) UpdateNodeOverlayNetwork(ctx context.Context, arg UpdateNodeOv
 		&i.ContainerdSock,
 		&i.TokenHash,
 		&i.TokenExpiresAt,
+		&i.CpuCores,
+		&i.MemoryTotalMib,
+		&i.DiskTotalGib,
+		&i.Hostname,
+		&i.Os,
+		&i.Arch,
+		&i.KernelVersion,
+		&i.HardwareReportedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -458,7 +632,7 @@ const updateNodeToken = `-- name: UpdateNodeToken :one
 UPDATE nodes
 SET token_hash = $2, token_expires_at = $3, updated_at = now()
 WHERE id = $1
-RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at
+RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, cpu_cores, memory_total_mib, disk_total_gib, hostname, os, arch, kernel_version, hardware_reported_at, created_at, updated_at
 `
 
 type UpdateNodeTokenParams struct {
@@ -483,6 +657,14 @@ func (q *Queries) UpdateNodeToken(ctx context.Context, arg UpdateNodeTokenParams
 		&i.ContainerdSock,
 		&i.TokenHash,
 		&i.TokenExpiresAt,
+		&i.CpuCores,
+		&i.MemoryTotalMib,
+		&i.DiskTotalGib,
+		&i.Hostname,
+		&i.Os,
+		&i.Arch,
+		&i.KernelVersion,
+		&i.HardwareReportedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

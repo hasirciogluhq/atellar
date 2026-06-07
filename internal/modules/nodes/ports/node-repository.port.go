@@ -35,6 +35,18 @@ type NodeRepositoryInterface interface {
 	ClearNodeOverlayNetwork(ctx context.Context, nodeID string) error
 	EvictNode(ctx context.Context, nodeID string) (*node.NodeEntity, error)
 	UpdateNodeOverlayNetwork(ctx context.Context, nodeID string, overlayIP net.IP, subnetCIDR string, status node.NodeStatus) (*node.NodeEntity, error)
+	UpdateNodeHardware(ctx context.Context, nodeID string, input UpdateNodeHardwareInput) (*node.NodeEntity, error)
+	ListSchedulableNodes(ctx context.Context) ([]node.NodeEntity, error)
+}
+
+type UpdateNodeHardwareInput struct {
+	CpuCores       int32
+	MemoryTotalMiB int32
+	DiskTotalGiB   int32
+	Hostname       string
+	OS             string
+	Arch           string
+	KernelVersion  string
 }
 
 type ReclaimableOverlayNetwork struct {

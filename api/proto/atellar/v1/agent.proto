@@ -10,6 +10,8 @@ service AgentService {
   rpc GetClusterNetworkState(GetClusterNetworkStateRequest) returns (GetClusterNetworkStateResponse);
   rpc GetNodeWorkloads(GetNodeWorkloadsRequest) returns (GetNodeWorkloadsResponse);
   rpc ReportContainerRuntime(ReportContainerRuntimeRequest) returns (ReportContainerRuntimeResponse);
+  rpc AllocateContainerOverlayIP(AllocateContainerOverlayIPRequest) returns (AllocateContainerOverlayIPResponse);
+  rpc ReportNodeHardware(ReportNodeHardwareRequest) returns (ReportNodeHardwareResponse);
 }
 
 enum DeliveryMode {
@@ -110,6 +112,9 @@ message Workload {
   double cpu_limit = 12;
   int32 cpu_shares = 13;
   int32 memory_limit_mib = 14;
+  string image_digest = 15;
+  int64 last_failed_at_unix = 16;
+  string error_message = 17;
 }
 
 message GetNodeWorkloadsResponse {
@@ -127,8 +132,29 @@ message ReportContainerRuntimeRequest {
   int32 exit_code = 8;
   string error_message = 9;
   int32 restart_count = 10;
+  int64 last_failed_at_unix = 11;
 }
 
 message ReportContainerRuntimeResponse {
   string overlay_ip = 1;
 }
+
+message AllocateContainerOverlayIPRequest {
+  string container_id = 1;
+}
+
+message AllocateContainerOverlayIPResponse {
+  string overlay_ip = 1;
+}
+
+message ReportNodeHardwareRequest {
+  int32 cpu_cores = 1;
+  int32 memory_total_mib = 2;
+  int32 disk_total_gib = 3;
+  string hostname = 4;
+  string os = 5;
+  string arch = 6;
+  string kernel_version = 7;
+}
+
+message ReportNodeHardwareResponse {}

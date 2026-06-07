@@ -49,7 +49,26 @@ Previous values are included:
 
 Triggered by: `PATCH /api/v1/nodes/:nodeId/overlay`
 
-## Container events
+## Workload dispatch (target node only)
+
+| Event | When | Target |
+|-------|------|--------|
+| `workload.dispatch` | Container scheduled to node | **Only** target node |
+| `workload.removed` | Container delete requested | **Only** target node |
+
+Payload:
+
+```json
+{
+  "event": "workload.dispatch",
+  "container_id": "ctr_...",
+  "node_id": "node_..."
+}
+```
+
+Agent triggers workload reconcile immediately (in addition to 15s poll).
+
+## Container events (peer overlay)
 
 | Event | When | Excluded |
 |-------|------|----------|

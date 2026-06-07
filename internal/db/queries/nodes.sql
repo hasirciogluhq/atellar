@@ -77,3 +77,26 @@ SET
     updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: UpdateNodeHardware :one
+UPDATE nodes
+SET
+    cpu_cores = $2,
+    memory_total_mib = $3,
+    disk_total_gib = $4,
+    hostname = $5,
+    os = $6,
+    arch = $7,
+    kernel_version = $8,
+    hardware_reported_at = now(),
+    updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: ListSchedulableNodes :many
+SELECT * FROM nodes
+WHERE status = 'ready'
+  AND hardware_reported_at IS NOT NULL
+  AND cpu_cores IS NOT NULL
+  AND memory_total_mib IS NOT NULL
+ORDER BY created_at ASC;

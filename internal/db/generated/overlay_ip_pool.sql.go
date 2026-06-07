@@ -12,6 +12,36 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const allocateFirstFreeOverlayIP = `-- name: AllocateFirstFreeOverlayIP :one
+UPDATE overlay_ip_pool
+SET container_id = $1, allocated_at = now()
+WHERE ip = (
+    SELECT p.ip FROM overlay_ip_pool AS p
+    WHERE p.node_id = $2 AND p.container_id IS NULL
+    ORDER BY p.ip
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING ip, node_id, container_id, allocated_at
+`
+
+type AllocateFirstFreeOverlayIPParams struct {
+	ContainerID pgtype.Text
+	NodeID      string
+}
+
+func (q *Queries) AllocateFirstFreeOverlayIP(ctx context.Context, arg AllocateFirstFreeOverlayIPParams) (OverlayIpPool, error) {
+	row := q.db.QueryRow(ctx, allocateFirstFreeOverlayIP, arg.ContainerID, arg.NodeID)
+	var i OverlayIpPool
+	err := row.Scan(
+		&i.Ip,
+		&i.NodeID,
+		&i.ContainerID,
+		&i.AllocatedAt,
+	)
+	return i, err
+}
+
 const allocateOverlayIP = `-- name: AllocateOverlayIP :one
 UPDATE overlay_ip_pool
 SET container_id = $2, allocated_at = now()
@@ -34,6 +64,18 @@ func (q *Queries) AllocateOverlayIP(ctx context.Context, arg AllocateOverlayIPPa
 		&i.AllocatedAt,
 	)
 	return i, err
+}
+
+const countFreeOverlayIPsByNodeId = `-- name: CountFreeOverlayIPsByNodeId :one
+SELECT COUNT(*)::int FROM overlay_ip_pool
+WHERE node_id = $1 AND container_id IS NULL
+`
+
+func (q *Queries) CountFreeOverlayIPsByNodeId(ctx context.Context, nodeID string) (int32, error) {
+	row := q.db.QueryRow(ctx, countFreeOverlayIPsByNodeId, nodeID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const createOverlayIPPoolEntry = `-- name: CreateOverlayIPPoolEntry :one

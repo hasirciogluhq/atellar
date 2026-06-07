@@ -47,6 +47,22 @@ func (c *AtellarClient) ListNodes(ctx context.Context) ([]Node, error) {
 	return nodes, nil
 }
 
+func (c *AtellarClient) CreateContainer(ctx context.Context, req CreateContainerRequest) (*Container, error) {
+	var result Container
+	if err := c.Do(ctx, http.MethodPost, apiPrefix+"/containers", nil, req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *AtellarClient) DeleteContainer(ctx context.Context, containerID string) (*Container, error) {
+	var result Container
+	if err := c.Do(ctx, http.MethodDelete, apiPrefix+"/containers/"+containerID, nil, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func (c *AtellarClient) ListContainers(ctx context.Context, nodeID string) ([]Container, error) {
 	query := url.Values{}
 	if nodeID != "" {

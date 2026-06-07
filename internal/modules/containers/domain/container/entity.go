@@ -15,6 +15,9 @@ const (
 	StatusRunning    Status = "running"
 	StatusStopped    Status = "stopped"
 	StatusCrashed    Status = "crashed"
+	StatusBackoff    Status = "backoff"
+	StatusFailed     Status = "failed"
+	StatusRemoved    Status = "removed"
 	StatusTerminated Status = "terminated"
 )
 
@@ -55,6 +58,7 @@ type Entity struct {
 	ErrorMessage   *string           `json:"error_message,omitempty"`
 	RestartCount   int32             `json:"restart_count"`
 	RestartPolicy  RestartPolicy     `json:"restart_policy"`
+	LastFailedAt   *time.Time        `json:"last_failed_at,omitempty"`
 	CreatedAt      time.Time         `json:"created_at"`
 	UpdatedAt      time.Time         `json:"updated_at"`
 	ScheduledAt    *time.Time        `json:"scheduled_at,omitempty"`

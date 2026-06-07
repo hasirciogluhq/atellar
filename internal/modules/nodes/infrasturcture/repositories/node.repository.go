@@ -15,6 +15,7 @@ import (
 	"github.com/hasirciogluhq/atellar/internal/platform/pgutil"
 	"github.com/hasirciogluhq/atellar/internal/platform/tokenhash"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type NodeRepository struct {
@@ -297,20 +298,57 @@ func (r *NodeRepository) UpdateNodeOverlayNetwork(ctx context.Context, nodeID st
 	return parseNode(row), nil
 }
 
+func (r *NodeRepository) UpdateNodeHardware(ctx context.Context, nodeID string, input ports.UpdateNodeHardwareInput) (*node.NodeEntity, error) {
+	row, err := r.queries.UpdateNodeHardware(ctx, db_generated.UpdateNodeHardwareParams{
+		ID:             nodeID,
+		CpuCores:       pgtype.Int4{Int32: input.CpuCores, Valid: true},
+		MemoryTotalMib: pgtype.Int4{Int32: input.MemoryTotalMiB, Valid: true},
+		DiskTotalGib:   pgtype.Int4{Int32: input.DiskTotalGiB, Valid: true},
+		Hostname:       pgutil.StringToText(&input.Hostname),
+		Os:             pgutil.StringToText(&input.OS),
+		Arch:           pgutil.StringToText(&input.Arch),
+		KernelVersion:  pgutil.StringToText(&input.KernelVersion),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parseNode(row), nil
+}
+
+func (r *NodeRepository) ListSchedulableNodes(ctx context.Context) ([]node.NodeEntity, error) {
+	rows, err := r.queries.ListSchedulableNodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nodes := make([]node.NodeEntity, 0, len(rows))
+	for _, row := range rows {
+		nodes = append(nodes, *parseNode(row))
+	}
+	return nodes, nil
+}
+
 func parseNode(row db_generated.Node) *node.NodeEntity {
 	return &node.NodeEntity{
-		ID:             row.ID,
-		Name:           row.Name,
-		PublicIP:       pgutil.AddrToNetIP(row.PublicIp),
-		PrivateIP:      pgutil.AddrToNetIP(row.PrivateIp),
-		OverlayIP:      pgutil.AddrToNetIP(row.OverlayIp),
-		OverlaySubnet:  pgutil.PrefixToString(row.OverlaySubnet),
-		Status:         node.NodeStatus(row.Status),
-		LastHeartbeat:  pgutil.TimestamptzToTime(row.LastHeartbeat),
-		AgentVersion:   pgutil.TextToString(row.AgentVersion),
-		ContainerdSock: row.ContainerdSock,
-		CreatedAt:      row.CreatedAt.Time,
-		UpdatedAt:      row.UpdatedAt.Time,
+		ID:                 row.ID,
+		Name:               row.Name,
+		PublicIP:           pgutil.AddrToNetIP(row.PublicIp),
+		PrivateIP:          pgutil.AddrToNetIP(row.PrivateIp),
+		OverlayIP:          pgutil.AddrToNetIP(row.OverlayIp),
+		OverlaySubnet:      pgutil.PrefixToString(row.OverlaySubnet),
+		Status:             node.NodeStatus(row.Status),
+		LastHeartbeat:      pgutil.TimestamptzToTime(row.LastHeartbeat),
+		AgentVersion:       pgutil.TextToString(row.AgentVersion),
+		ContainerdSock:     row.ContainerdSock,
+		CpuCores:           pgutil.Int4ToInt32Ptr(row.CpuCores),
+		MemoryTotalMiB:     pgutil.Int4ToInt32Ptr(row.MemoryTotalMib),
+		DiskTotalGiB:       pgutil.Int4ToInt32Ptr(row.DiskTotalGib),
+		Hostname:           pgutil.TextToString(row.Hostname),
+		OS:                 pgutil.TextToString(row.Os),
+		Arch:               pgutil.TextToString(row.Arch),
+		KernelVersion:      pgutil.TextToString(row.KernelVersion),
+		HardwareReportedAt: pgutil.TimestamptzToTime(row.HardwareReportedAt),
+		CreatedAt:          row.CreatedAt.Time,
+		UpdatedAt:          row.UpdatedAt.Time,
 	}
 }
 

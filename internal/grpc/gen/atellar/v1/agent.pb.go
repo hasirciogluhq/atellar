@@ -935,23 +935,26 @@ func (*GetNodeWorkloadsRequest) Descriptor() ([]byte, []int) {
 }
 
 type Workload struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Image          string                 `protobuf:"bytes,2,opt,name=image,proto3" json:"image,omitempty"`
-	Command        []string               `protobuf:"bytes,3,rep,name=command,proto3" json:"command,omitempty"`
-	Entrypoint     []string               `protobuf:"bytes,4,rep,name=entrypoint,proto3" json:"entrypoint,omitempty"`
-	Env            map[string]string      `protobuf:"bytes,5,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	WorkingDir     string                 `protobuf:"bytes,6,opt,name=working_dir,json=workingDir,proto3" json:"working_dir,omitempty"`
-	ContainerdNs   string                 `protobuf:"bytes,7,opt,name=containerd_ns,json=containerdNs,proto3" json:"containerd_ns,omitempty"`
-	Status         string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
-	RestartPolicy  string                 `protobuf:"bytes,9,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
-	OverlayIp      string                 `protobuf:"bytes,10,opt,name=overlay_ip,json=overlayIp,proto3" json:"overlay_ip,omitempty"`
-	RestartCount   int32                  `protobuf:"varint,11,opt,name=restart_count,json=restartCount,proto3" json:"restart_count,omitempty"`
-	CpuLimit       float64                `protobuf:"fixed64,12,opt,name=cpu_limit,json=cpuLimit,proto3" json:"cpu_limit,omitempty"`
-	CpuShares      int32                  `protobuf:"varint,13,opt,name=cpu_shares,json=cpuShares,proto3" json:"cpu_shares,omitempty"`
-	MemoryLimitMib int32                  `protobuf:"varint,14,opt,name=memory_limit_mib,json=memoryLimitMib,proto3" json:"memory_limit_mib,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Image            string                 `protobuf:"bytes,2,opt,name=image,proto3" json:"image,omitempty"`
+	Command          []string               `protobuf:"bytes,3,rep,name=command,proto3" json:"command,omitempty"`
+	Entrypoint       []string               `protobuf:"bytes,4,rep,name=entrypoint,proto3" json:"entrypoint,omitempty"`
+	Env              map[string]string      `protobuf:"bytes,5,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	WorkingDir       string                 `protobuf:"bytes,6,opt,name=working_dir,json=workingDir,proto3" json:"working_dir,omitempty"`
+	ContainerdNs     string                 `protobuf:"bytes,7,opt,name=containerd_ns,json=containerdNs,proto3" json:"containerd_ns,omitempty"`
+	Status           string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
+	RestartPolicy    string                 `protobuf:"bytes,9,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
+	OverlayIp        string                 `protobuf:"bytes,10,opt,name=overlay_ip,json=overlayIp,proto3" json:"overlay_ip,omitempty"`
+	RestartCount     int32                  `protobuf:"varint,11,opt,name=restart_count,json=restartCount,proto3" json:"restart_count,omitempty"`
+	CpuLimit         float64                `protobuf:"fixed64,12,opt,name=cpu_limit,json=cpuLimit,proto3" json:"cpu_limit,omitempty"`
+	CpuShares        int32                  `protobuf:"varint,13,opt,name=cpu_shares,json=cpuShares,proto3" json:"cpu_shares,omitempty"`
+	MemoryLimitMib   int32                  `protobuf:"varint,14,opt,name=memory_limit_mib,json=memoryLimitMib,proto3" json:"memory_limit_mib,omitempty"`
+	ImageDigest      string                 `protobuf:"bytes,15,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
+	LastFailedAtUnix int64                  `protobuf:"varint,16,opt,name=last_failed_at_unix,json=lastFailedAtUnix,proto3" json:"last_failed_at_unix,omitempty"`
+	ErrorMessage     string                 `protobuf:"bytes,17,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Workload) Reset() {
@@ -1082,6 +1085,27 @@ func (x *Workload) GetMemoryLimitMib() int32 {
 	return 0
 }
 
+func (x *Workload) GetImageDigest() string {
+	if x != nil {
+		return x.ImageDigest
+	}
+	return ""
+}
+
+func (x *Workload) GetLastFailedAtUnix() int64 {
+	if x != nil {
+		return x.LastFailedAtUnix
+	}
+	return 0
+}
+
+func (x *Workload) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
 type GetNodeWorkloadsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Workloads     []*Workload            `protobuf:"bytes,1,rep,name=workloads,proto3" json:"workloads,omitempty"`
@@ -1127,19 +1151,20 @@ func (x *GetNodeWorkloadsResponse) GetWorkloads() []*Workload {
 }
 
 type ReportContainerRuntimeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	ContainerdId  string                 `protobuf:"bytes,2,opt,name=containerd_id,json=containerdId,proto3" json:"containerd_id,omitempty"`
-	SnapshotKey   string                 `protobuf:"bytes,3,opt,name=snapshot_key,json=snapshotKey,proto3" json:"snapshot_key,omitempty"`
-	TaskPid       int32                  `protobuf:"varint,4,opt,name=task_pid,json=taskPid,proto3" json:"task_pid,omitempty"`
-	ImageDigest   string                 `protobuf:"bytes,5,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
-	OverlayIp     string                 `protobuf:"bytes,6,opt,name=overlay_ip,json=overlayIp,proto3" json:"overlay_ip,omitempty"`
-	Status        string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
-	ExitCode      int32                  `protobuf:"varint,8,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
-	ErrorMessage  string                 `protobuf:"bytes,9,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	RestartCount  int32                  `protobuf:"varint,10,opt,name=restart_count,json=restartCount,proto3" json:"restart_count,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ContainerId      string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	ContainerdId     string                 `protobuf:"bytes,2,opt,name=containerd_id,json=containerdId,proto3" json:"containerd_id,omitempty"`
+	SnapshotKey      string                 `protobuf:"bytes,3,opt,name=snapshot_key,json=snapshotKey,proto3" json:"snapshot_key,omitempty"`
+	TaskPid          int32                  `protobuf:"varint,4,opt,name=task_pid,json=taskPid,proto3" json:"task_pid,omitempty"`
+	ImageDigest      string                 `protobuf:"bytes,5,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
+	OverlayIp        string                 `protobuf:"bytes,6,opt,name=overlay_ip,json=overlayIp,proto3" json:"overlay_ip,omitempty"`
+	Status           string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
+	ExitCode         int32                  `protobuf:"varint,8,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	ErrorMessage     string                 `protobuf:"bytes,9,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	RestartCount     int32                  `protobuf:"varint,10,opt,name=restart_count,json=restartCount,proto3" json:"restart_count,omitempty"`
+	LastFailedAtUnix int64                  `protobuf:"varint,11,opt,name=last_failed_at_unix,json=lastFailedAtUnix,proto3" json:"last_failed_at_unix,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ReportContainerRuntimeRequest) Reset() {
@@ -1242,6 +1267,13 @@ func (x *ReportContainerRuntimeRequest) GetRestartCount() int32 {
 	return 0
 }
 
+func (x *ReportContainerRuntimeRequest) GetLastFailedAtUnix() int64 {
+	if x != nil {
+		return x.LastFailedAtUnix
+	}
+	return 0
+}
+
 type ReportContainerRuntimeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OverlayIp     string                 `protobuf:"bytes,1,opt,name=overlay_ip,json=overlayIp,proto3" json:"overlay_ip,omitempty"`
@@ -1284,6 +1316,222 @@ func (x *ReportContainerRuntimeResponse) GetOverlayIp() string {
 		return x.OverlayIp
 	}
 	return ""
+}
+
+type AllocateContainerOverlayIPRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AllocateContainerOverlayIPRequest) Reset() {
+	*x = AllocateContainerOverlayIPRequest{}
+	mi := &file_atellar_v1_agent_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AllocateContainerOverlayIPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AllocateContainerOverlayIPRequest) ProtoMessage() {}
+
+func (x *AllocateContainerOverlayIPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_atellar_v1_agent_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AllocateContainerOverlayIPRequest.ProtoReflect.Descriptor instead.
+func (*AllocateContainerOverlayIPRequest) Descriptor() ([]byte, []int) {
+	return file_atellar_v1_agent_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *AllocateContainerOverlayIPRequest) GetContainerId() string {
+	if x != nil {
+		return x.ContainerId
+	}
+	return ""
+}
+
+type AllocateContainerOverlayIPResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OverlayIp     string                 `protobuf:"bytes,1,opt,name=overlay_ip,json=overlayIp,proto3" json:"overlay_ip,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AllocateContainerOverlayIPResponse) Reset() {
+	*x = AllocateContainerOverlayIPResponse{}
+	mi := &file_atellar_v1_agent_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AllocateContainerOverlayIPResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AllocateContainerOverlayIPResponse) ProtoMessage() {}
+
+func (x *AllocateContainerOverlayIPResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_atellar_v1_agent_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AllocateContainerOverlayIPResponse.ProtoReflect.Descriptor instead.
+func (*AllocateContainerOverlayIPResponse) Descriptor() ([]byte, []int) {
+	return file_atellar_v1_agent_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *AllocateContainerOverlayIPResponse) GetOverlayIp() string {
+	if x != nil {
+		return x.OverlayIp
+	}
+	return ""
+}
+
+type ReportNodeHardwareRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CpuCores       int32                  `protobuf:"varint,1,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
+	MemoryTotalMib int32                  `protobuf:"varint,2,opt,name=memory_total_mib,json=memoryTotalMib,proto3" json:"memory_total_mib,omitempty"`
+	DiskTotalGib   int32                  `protobuf:"varint,3,opt,name=disk_total_gib,json=diskTotalGib,proto3" json:"disk_total_gib,omitempty"`
+	Hostname       string                 `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Os             string                 `protobuf:"bytes,5,opt,name=os,proto3" json:"os,omitempty"`
+	Arch           string                 `protobuf:"bytes,6,opt,name=arch,proto3" json:"arch,omitempty"`
+	KernelVersion  string                 `protobuf:"bytes,7,opt,name=kernel_version,json=kernelVersion,proto3" json:"kernel_version,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ReportNodeHardwareRequest) Reset() {
+	*x = ReportNodeHardwareRequest{}
+	mi := &file_atellar_v1_agent_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportNodeHardwareRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportNodeHardwareRequest) ProtoMessage() {}
+
+func (x *ReportNodeHardwareRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_atellar_v1_agent_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportNodeHardwareRequest.ProtoReflect.Descriptor instead.
+func (*ReportNodeHardwareRequest) Descriptor() ([]byte, []int) {
+	return file_atellar_v1_agent_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ReportNodeHardwareRequest) GetCpuCores() int32 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
+}
+
+func (x *ReportNodeHardwareRequest) GetMemoryTotalMib() int32 {
+	if x != nil {
+		return x.MemoryTotalMib
+	}
+	return 0
+}
+
+func (x *ReportNodeHardwareRequest) GetDiskTotalGib() int32 {
+	if x != nil {
+		return x.DiskTotalGib
+	}
+	return 0
+}
+
+func (x *ReportNodeHardwareRequest) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *ReportNodeHardwareRequest) GetOs() string {
+	if x != nil {
+		return x.Os
+	}
+	return ""
+}
+
+func (x *ReportNodeHardwareRequest) GetArch() string {
+	if x != nil {
+		return x.Arch
+	}
+	return ""
+}
+
+func (x *ReportNodeHardwareRequest) GetKernelVersion() string {
+	if x != nil {
+		return x.KernelVersion
+	}
+	return ""
+}
+
+type ReportNodeHardwareResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportNodeHardwareResponse) Reset() {
+	*x = ReportNodeHardwareResponse{}
+	mi := &file_atellar_v1_agent_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportNodeHardwareResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportNodeHardwareResponse) ProtoMessage() {}
+
+func (x *ReportNodeHardwareResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_atellar_v1_agent_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportNodeHardwareResponse.ProtoReflect.Descriptor instead.
+func (*ReportNodeHardwareResponse) Descriptor() ([]byte, []int) {
+	return file_atellar_v1_agent_proto_rawDescGZIP(), []int{22}
 }
 
 var File_atellar_v1_agent_proto protoreflect.FileDescriptor
@@ -1347,7 +1595,7 @@ const file_atellar_v1_agent_proto_rawDesc = "" +
 	"\n" +
 	"containers\x18\x02 \x03(\v2\x1c.atellar.v1.ClusterContainerR\n" +
 	"containers\"\x19\n" +
-	"\x17GetNodeWorkloadsRequest\"\x82\x04\n" +
+	"\x17GetNodeWorkloadsRequest\"\xf9\x04\n" +
 	"\bWorkload\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05image\x18\x02 \x01(\tR\x05image\x12\x18\n" +
@@ -1368,12 +1616,15 @@ const file_atellar_v1_agent_proto_rawDesc = "" +
 	"\tcpu_limit\x18\f \x01(\x01R\bcpuLimit\x12\x1d\n" +
 	"\n" +
 	"cpu_shares\x18\r \x01(\x05R\tcpuShares\x12(\n" +
-	"\x10memory_limit_mib\x18\x0e \x01(\x05R\x0ememoryLimitMib\x1a6\n" +
+	"\x10memory_limit_mib\x18\x0e \x01(\x05R\x0ememoryLimitMib\x12!\n" +
+	"\fimage_digest\x18\x0f \x01(\tR\vimageDigest\x12-\n" +
+	"\x13last_failed_at_unix\x18\x10 \x01(\x03R\x10lastFailedAtUnix\x12#\n" +
+	"\rerror_message\x18\x11 \x01(\tR\ferrorMessage\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"N\n" +
 	"\x18GetNodeWorkloadsResponse\x122\n" +
-	"\tworkloads\x18\x01 \x03(\v2\x14.atellar.v1.WorkloadR\tworkloads\"\xe6\x02\n" +
+	"\tworkloads\x18\x01 \x03(\v2\x14.atellar.v1.WorkloadR\tworkloads\"\x95\x03\n" +
 	"\x1dReportContainerRuntimeRequest\x12!\n" +
 	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12#\n" +
 	"\rcontainerd_id\x18\x02 \x01(\tR\fcontainerdId\x12!\n" +
@@ -1386,20 +1637,37 @@ const file_atellar_v1_agent_proto_rawDesc = "" +
 	"\texit_code\x18\b \x01(\x05R\bexitCode\x12#\n" +
 	"\rerror_message\x18\t \x01(\tR\ferrorMessage\x12#\n" +
 	"\rrestart_count\x18\n" +
-	" \x01(\x05R\frestartCount\"?\n" +
+	" \x01(\x05R\frestartCount\x12-\n" +
+	"\x13last_failed_at_unix\x18\v \x01(\x03R\x10lastFailedAtUnix\"?\n" +
 	"\x1eReportContainerRuntimeResponse\x12\x1d\n" +
 	"\n" +
-	"overlay_ip\x18\x01 \x01(\tR\toverlayIp*^\n" +
+	"overlay_ip\x18\x01 \x01(\tR\toverlayIp\"F\n" +
+	"!AllocateContainerOverlayIPRequest\x12!\n" +
+	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\"C\n" +
+	"\"AllocateContainerOverlayIPResponse\x12\x1d\n" +
+	"\n" +
+	"overlay_ip\x18\x01 \x01(\tR\toverlayIp\"\xef\x01\n" +
+	"\x19ReportNodeHardwareRequest\x12\x1b\n" +
+	"\tcpu_cores\x18\x01 \x01(\x05R\bcpuCores\x12(\n" +
+	"\x10memory_total_mib\x18\x02 \x01(\x05R\x0ememoryTotalMib\x12$\n" +
+	"\x0edisk_total_gib\x18\x03 \x01(\x05R\fdiskTotalGib\x12\x1a\n" +
+	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x0e\n" +
+	"\x02os\x18\x05 \x01(\tR\x02os\x12\x12\n" +
+	"\x04arch\x18\x06 \x01(\tR\x04arch\x12%\n" +
+	"\x0ekernel_version\x18\a \x01(\tR\rkernelVersion\"\x1c\n" +
+	"\x1aReportNodeHardwareResponse*^\n" +
 	"\fDeliveryMode\x12\x1d\n" +
 	"\x19DELIVERY_MODE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12DELIVERY_MODE_SYNC\x10\x01\x12\x17\n" +
-	"\x13DELIVERY_MODE_ASYNC\x10\x022\xf1\x03\n" +
+	"\x13DELIVERY_MODE_ASYNC\x10\x022\xd3\x05\n" +
 	"\fAgentService\x12D\n" +
 	"\aConnect\x12\x19.atellar.v1.AgentEnvelope\x1a\x1a.atellar.v1.ServerEnvelope(\x010\x01\x12Z\n" +
 	"\x0fRenewNodeAPIKey\x12\".atellar.v1.RenewNodeAPIKeyRequest\x1a#.atellar.v1.RenewNodeAPIKeyResponse\x12o\n" +
 	"\x16GetClusterNetworkState\x12).atellar.v1.GetClusterNetworkStateRequest\x1a*.atellar.v1.GetClusterNetworkStateResponse\x12]\n" +
 	"\x10GetNodeWorkloads\x12#.atellar.v1.GetNodeWorkloadsRequest\x1a$.atellar.v1.GetNodeWorkloadsResponse\x12o\n" +
-	"\x16ReportContainerRuntime\x12).atellar.v1.ReportContainerRuntimeRequest\x1a*.atellar.v1.ReportContainerRuntimeResponseBIZGgithub.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1;atellarv1b\x06proto3"
+	"\x16ReportContainerRuntime\x12).atellar.v1.ReportContainerRuntimeRequest\x1a*.atellar.v1.ReportContainerRuntimeResponse\x12{\n" +
+	"\x1aAllocateContainerOverlayIP\x12-.atellar.v1.AllocateContainerOverlayIPRequest\x1a..atellar.v1.AllocateContainerOverlayIPResponse\x12c\n" +
+	"\x12ReportNodeHardware\x12%.atellar.v1.ReportNodeHardwareRequest\x1a&.atellar.v1.ReportNodeHardwareResponseBIZGgithub.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1;atellarv1b\x06proto3"
 
 var (
 	file_atellar_v1_agent_proto_rawDescOnce sync.Once
@@ -1414,29 +1682,33 @@ func file_atellar_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_atellar_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_atellar_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_atellar_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_atellar_v1_agent_proto_goTypes = []any{
-	(DeliveryMode)(0),                      // 0: atellar.v1.DeliveryMode
-	(*AgentEnvelope)(nil),                  // 1: atellar.v1.AgentEnvelope
-	(*ServerEnvelope)(nil),                 // 2: atellar.v1.ServerEnvelope
-	(*Heartbeat)(nil),                      // 3: atellar.v1.Heartbeat
-	(*HeartbeatAck)(nil),                   // 4: atellar.v1.HeartbeatAck
-	(*Ingest)(nil),                         // 5: atellar.v1.Ingest
-	(*IngestAck)(nil),                      // 6: atellar.v1.IngestAck
-	(*RpcCall)(nil),                        // 7: atellar.v1.RpcCall
-	(*RpcResult)(nil),                      // 8: atellar.v1.RpcResult
-	(*RenewNodeAPIKeyRequest)(nil),         // 9: atellar.v1.RenewNodeAPIKeyRequest
-	(*RenewNodeAPIKeyResponse)(nil),        // 10: atellar.v1.RenewNodeAPIKeyResponse
-	(*GetClusterNetworkStateRequest)(nil),  // 11: atellar.v1.GetClusterNetworkStateRequest
-	(*ClusterNode)(nil),                    // 12: atellar.v1.ClusterNode
-	(*ClusterContainer)(nil),               // 13: atellar.v1.ClusterContainer
-	(*GetClusterNetworkStateResponse)(nil), // 14: atellar.v1.GetClusterNetworkStateResponse
-	(*GetNodeWorkloadsRequest)(nil),        // 15: atellar.v1.GetNodeWorkloadsRequest
-	(*Workload)(nil),                       // 16: atellar.v1.Workload
-	(*GetNodeWorkloadsResponse)(nil),       // 17: atellar.v1.GetNodeWorkloadsResponse
-	(*ReportContainerRuntimeRequest)(nil),  // 18: atellar.v1.ReportContainerRuntimeRequest
-	(*ReportContainerRuntimeResponse)(nil), // 19: atellar.v1.ReportContainerRuntimeResponse
-	nil,                                    // 20: atellar.v1.Workload.EnvEntry
+	(DeliveryMode)(0),                          // 0: atellar.v1.DeliveryMode
+	(*AgentEnvelope)(nil),                      // 1: atellar.v1.AgentEnvelope
+	(*ServerEnvelope)(nil),                     // 2: atellar.v1.ServerEnvelope
+	(*Heartbeat)(nil),                          // 3: atellar.v1.Heartbeat
+	(*HeartbeatAck)(nil),                       // 4: atellar.v1.HeartbeatAck
+	(*Ingest)(nil),                             // 5: atellar.v1.Ingest
+	(*IngestAck)(nil),                          // 6: atellar.v1.IngestAck
+	(*RpcCall)(nil),                            // 7: atellar.v1.RpcCall
+	(*RpcResult)(nil),                          // 8: atellar.v1.RpcResult
+	(*RenewNodeAPIKeyRequest)(nil),             // 9: atellar.v1.RenewNodeAPIKeyRequest
+	(*RenewNodeAPIKeyResponse)(nil),            // 10: atellar.v1.RenewNodeAPIKeyResponse
+	(*GetClusterNetworkStateRequest)(nil),      // 11: atellar.v1.GetClusterNetworkStateRequest
+	(*ClusterNode)(nil),                        // 12: atellar.v1.ClusterNode
+	(*ClusterContainer)(nil),                   // 13: atellar.v1.ClusterContainer
+	(*GetClusterNetworkStateResponse)(nil),     // 14: atellar.v1.GetClusterNetworkStateResponse
+	(*GetNodeWorkloadsRequest)(nil),            // 15: atellar.v1.GetNodeWorkloadsRequest
+	(*Workload)(nil),                           // 16: atellar.v1.Workload
+	(*GetNodeWorkloadsResponse)(nil),           // 17: atellar.v1.GetNodeWorkloadsResponse
+	(*ReportContainerRuntimeRequest)(nil),      // 18: atellar.v1.ReportContainerRuntimeRequest
+	(*ReportContainerRuntimeResponse)(nil),     // 19: atellar.v1.ReportContainerRuntimeResponse
+	(*AllocateContainerOverlayIPRequest)(nil),  // 20: atellar.v1.AllocateContainerOverlayIPRequest
+	(*AllocateContainerOverlayIPResponse)(nil), // 21: atellar.v1.AllocateContainerOverlayIPResponse
+	(*ReportNodeHardwareRequest)(nil),          // 22: atellar.v1.ReportNodeHardwareRequest
+	(*ReportNodeHardwareResponse)(nil),         // 23: atellar.v1.ReportNodeHardwareResponse
+	nil,                                        // 24: atellar.v1.Workload.EnvEntry
 }
 var file_atellar_v1_agent_proto_depIdxs = []int32{
 	3,  // 0: atellar.v1.AgentEnvelope.heartbeat:type_name -> atellar.v1.Heartbeat
@@ -1448,20 +1720,24 @@ var file_atellar_v1_agent_proto_depIdxs = []int32{
 	0,  // 6: atellar.v1.RpcCall.mode:type_name -> atellar.v1.DeliveryMode
 	12, // 7: atellar.v1.GetClusterNetworkStateResponse.nodes:type_name -> atellar.v1.ClusterNode
 	13, // 8: atellar.v1.GetClusterNetworkStateResponse.containers:type_name -> atellar.v1.ClusterContainer
-	20, // 9: atellar.v1.Workload.env:type_name -> atellar.v1.Workload.EnvEntry
+	24, // 9: atellar.v1.Workload.env:type_name -> atellar.v1.Workload.EnvEntry
 	16, // 10: atellar.v1.GetNodeWorkloadsResponse.workloads:type_name -> atellar.v1.Workload
 	1,  // 11: atellar.v1.AgentService.Connect:input_type -> atellar.v1.AgentEnvelope
 	9,  // 12: atellar.v1.AgentService.RenewNodeAPIKey:input_type -> atellar.v1.RenewNodeAPIKeyRequest
 	11, // 13: atellar.v1.AgentService.GetClusterNetworkState:input_type -> atellar.v1.GetClusterNetworkStateRequest
 	15, // 14: atellar.v1.AgentService.GetNodeWorkloads:input_type -> atellar.v1.GetNodeWorkloadsRequest
 	18, // 15: atellar.v1.AgentService.ReportContainerRuntime:input_type -> atellar.v1.ReportContainerRuntimeRequest
-	2,  // 16: atellar.v1.AgentService.Connect:output_type -> atellar.v1.ServerEnvelope
-	10, // 17: atellar.v1.AgentService.RenewNodeAPIKey:output_type -> atellar.v1.RenewNodeAPIKeyResponse
-	14, // 18: atellar.v1.AgentService.GetClusterNetworkState:output_type -> atellar.v1.GetClusterNetworkStateResponse
-	17, // 19: atellar.v1.AgentService.GetNodeWorkloads:output_type -> atellar.v1.GetNodeWorkloadsResponse
-	19, // 20: atellar.v1.AgentService.ReportContainerRuntime:output_type -> atellar.v1.ReportContainerRuntimeResponse
-	16, // [16:21] is the sub-list for method output_type
-	11, // [11:16] is the sub-list for method input_type
+	20, // 16: atellar.v1.AgentService.AllocateContainerOverlayIP:input_type -> atellar.v1.AllocateContainerOverlayIPRequest
+	22, // 17: atellar.v1.AgentService.ReportNodeHardware:input_type -> atellar.v1.ReportNodeHardwareRequest
+	2,  // 18: atellar.v1.AgentService.Connect:output_type -> atellar.v1.ServerEnvelope
+	10, // 19: atellar.v1.AgentService.RenewNodeAPIKey:output_type -> atellar.v1.RenewNodeAPIKeyResponse
+	14, // 20: atellar.v1.AgentService.GetClusterNetworkState:output_type -> atellar.v1.GetClusterNetworkStateResponse
+	17, // 21: atellar.v1.AgentService.GetNodeWorkloads:output_type -> atellar.v1.GetNodeWorkloadsResponse
+	19, // 22: atellar.v1.AgentService.ReportContainerRuntime:output_type -> atellar.v1.ReportContainerRuntimeResponse
+	21, // 23: atellar.v1.AgentService.AllocateContainerOverlayIP:output_type -> atellar.v1.AllocateContainerOverlayIPResponse
+	23, // 24: atellar.v1.AgentService.ReportNodeHardware:output_type -> atellar.v1.ReportNodeHardwareResponse
+	18, // [18:25] is the sub-list for method output_type
+	11, // [11:18] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name
@@ -1488,7 +1764,7 @@ func file_atellar_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_atellar_v1_agent_proto_rawDesc), len(file_atellar_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   20,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

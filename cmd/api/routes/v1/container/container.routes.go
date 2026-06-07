@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hasirciogluhq/atellar/cmd/api/shared"
 	"github.com/hasirciogluhq/atellar/internal/grpc/agentregistry"
+	"github.com/hasirciogluhq/atellar/internal/modules/containers/application/services"
 	"github.com/hasirciogluhq/atellar/internal/modules/containers/application/usecases"
 	container "github.com/hasirciogluhq/atellar/internal/modules/containers/domain/container"
 	containerevent "github.com/hasirciogluhq/atellar/internal/modules/containers/domain/container-event"
@@ -16,7 +17,6 @@ import (
 )
 
 type createContainerRequest struct {
-	NodeID         string            `json:"node_id" binding:"required"`
 	Image          string            `json:"image" binding:"required"`
 	Command        []string          `json:"command"`
 	Entrypoint     []string          `json:"entrypoint"`
@@ -26,7 +26,6 @@ type createContainerRequest struct {
 	CpuShares      *int32            `json:"cpu_shares"`
 	MemoryLimitMiB *int32            `json:"memory_limit_mib"`
 	RestartPolicy  string            `json:"restart_policy"`
-	ContainerdNs   string            `json:"containerd_ns"`
 }
 
 type updateContainerStatusRequest struct {
@@ -78,6 +77,8 @@ func containerStatusPeerEvent(status container.Status) string {
 }
 
 func registerContainerRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
+	scheduler := services.NewScheduler(infra.Repositories.Nodes, infra.Repositories.Containers)
+
 	c.POST("", func(ctx *gin.Context) {
 		var req createContainerRequest
 		if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -85,14 +86,12 @@ func registerContainerRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 			return
 		}
 
-		restartPolicy := container.RestartPolicy(req.RestartPolicy)
-		if restartPolicy == "" {
-			restartPolicy = container.RestartPolicyNo
-		}
-
-		useCase := usecases.NewCreateContainerUseCase(infra.Repositories.Containers)
-		createdContainer, err := useCase.Execute(ctx.Request.Context(), ports.CreateContainerInput{
-			NodeID:         req.NodeID,
+		deploy := usecases.NewDeployContainerUseCase(
+			scheduler,
+			infra.Repositories.Containers,
+			infra.ContainerPeerNotifier,
+		)
+		createdContainer, err := deploy.Execute(ctx.Request.Context(), ports.DeployContainerInput{
 			Image:          req.Image,
 			Command:        req.Command,
 			Entrypoint:     req.Entrypoint,
@@ -101,17 +100,25 @@ func registerContainerRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 			CpuLimit:       req.CpuLimit,
 			CpuShares:      req.CpuShares,
 			MemoryLimitMiB: req.MemoryLimitMiB,
-			RestartPolicy:  restartPolicy,
-			ContainerdNs:   req.ContainerdNs,
+			RestartPolicy:  container.RestartPolicy(req.RestartPolicy),
 		})
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		notifyContainerPeerEvent(ctx.Request.Context(), infra, agentregistry.PeerEventContainerScheduled, *createdContainer)
-
 		ctx.JSON(http.StatusCreated, createdContainer)
+	})
+
+	c.DELETE("/:containerId", func(ctx *gin.Context) {
+		containerID := ctx.Param("containerId")
+		deleteUC := usecases.NewDeleteContainerUseCase(infra.Repositories.Containers, infra.ContainerPeerNotifier)
+		removed, err := deleteUC.Execute(ctx.Request.Context(), containerID)
+		if err != nil {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		ctx.JSON(http.StatusOK, removed)
 	})
 
 	c.GET("", func(ctx *gin.Context) {
@@ -160,6 +167,7 @@ func registerContainerRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 		ctx.JSON(http.StatusOK, updatedContainer)
 	})
 
+	// Deprecated: agents report via gRPC ReportContainerRuntime.
 	c.PATCH("/:containerId/runtime", func(ctx *gin.Context) {
 		containerID := ctx.Param("containerId")
 		var req updateContainerRuntimeRequest

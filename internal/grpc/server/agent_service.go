@@ -4,11 +4,16 @@ import (
 	"context"
 	"io"
 	"log"
+	"net"
 	"time"
 
+	"github.com/hasirciogluhq/atellar/internal/grpc/agentregistry"
 	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
 	containerusecases "github.com/hasirciogluhq/atellar/internal/modules/containers/application/usecases"
+	container "github.com/hasirciogluhq/atellar/internal/modules/containers/domain/container"
+	"github.com/hasirciogluhq/atellar/internal/modules/containers/ports"
 	nodeusecases "github.com/hasirciogluhq/atellar/internal/modules/nodes/application/usecases"
+	nodeports "github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
 	"github.com/hasirciogluhq/atellar/internal/platform/authn"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -157,4 +162,180 @@ func (s *AgentService) GetClusterNetworkState(ctx context.Context, _ *atellarv1.
 	}
 
 	return resp, nil
+}
+
+func (s *AgentService) GetNodeWorkloads(ctx context.Context, _ *atellarv1.GetNodeWorkloadsRequest) (*atellarv1.GetNodeWorkloadsResponse, error) {
+	authCtx, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+	nodeEntity, err := authn.MustNodeFromContext(authCtx)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+
+	useCase := containerusecases.NewGetNodeWorkloadsUseCase(s.deps.Containers)
+	workloads, err := useCase.Execute(authCtx, nodeEntity.ID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list workloads: %v", err)
+	}
+
+	resp := &atellarv1.GetNodeWorkloadsResponse{Workloads: make([]*atellarv1.Workload, 0, len(workloads))}
+	for _, w := range workloads {
+		resp.Workloads = append(resp.Workloads, workloadToProto(w))
+	}
+	return resp, nil
+}
+
+func (s *AgentService) ReportContainerRuntime(ctx context.Context, req *atellarv1.ReportContainerRuntimeRequest) (*atellarv1.ReportContainerRuntimeResponse, error) {
+	authCtx, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+	nodeEntity, err := authn.MustNodeFromContext(authCtx)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+
+	runtimeInput := ports.UpdateContainerRuntimeInput{
+		ContainerdID: optionalString(req.GetContainerdId()),
+		SnapshotKey:  optionalString(req.GetSnapshotKey()),
+		TaskPID:      optionalInt32(req.GetTaskPid()),
+		ImageDigest:  optionalString(req.GetImageDigest()),
+		OverlayIP:    parseOverlayIP(req.GetOverlayIp()),
+		Status:       container.Status(req.GetStatus()),
+		ExitCode:     optionalInt32(req.GetExitCode()),
+		ErrorMessage: optionalString(req.GetErrorMessage()),
+		RestartCount: optionalInt32(req.GetRestartCount()),
+	}
+	if req.GetLastFailedAtUnix() > 0 {
+		t := time.Unix(req.GetLastFailedAtUnix(), 0)
+		runtimeInput.LastFailedAt = &t
+	}
+
+	useCase := containerusecases.NewReportContainerRuntimeUseCase(s.deps.Containers, s.deps.ContainerPeerNotifier)
+	updated, err := useCase.Execute(authCtx, containerusecases.ReportContainerRuntimeInput{
+		NodeID:      nodeEntity.ID,
+		ContainerID: req.GetContainerId(),
+		Runtime:     runtimeInput,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	return &atellarv1.ReportContainerRuntimeResponse{OverlayIp: updated.OverlayIP.String()}, nil
+}
+
+func (s *AgentService) AllocateContainerOverlayIP(ctx context.Context, req *atellarv1.AllocateContainerOverlayIPRequest) (*atellarv1.AllocateContainerOverlayIPResponse, error) {
+	authCtx, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+	nodeEntity, err := authn.MustNodeFromContext(authCtx)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+
+	useCase := containerusecases.NewAllocateContainerOverlayIPUseCase(s.deps.Containers)
+	ip, err := useCase.Execute(authCtx, nodeEntity.ID, req.GetContainerId())
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "%v", err)
+	}
+
+	if s.deps.ContainerPeerNotifier != nil {
+		found, _ := s.deps.Containers.GetContainerById(authCtx, req.GetContainerId())
+		if found != nil {
+			_ = s.deps.ContainerPeerNotifier.NotifyContainerEvent(ctx, agentregistry.PeerEventContainerUpdated, *found)
+		}
+	}
+
+	return &atellarv1.AllocateContainerOverlayIPResponse{OverlayIp: ip.String()}, nil
+}
+
+func (s *AgentService) ReportNodeHardware(ctx context.Context, req *atellarv1.ReportNodeHardwareRequest) (*atellarv1.ReportNodeHardwareResponse, error) {
+	authCtx, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+	nodeEntity, err := authn.MustNodeFromContext(authCtx)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+
+	useCase := nodeusecases.NewUpdateNodeHardwareUseCase(s.deps.Nodes)
+	_, err = useCase.Execute(authCtx, nodeEntity.ID, nodeports.UpdateNodeHardwareInput{
+		CpuCores:       req.GetCpuCores(),
+		MemoryTotalMiB: req.GetMemoryTotalMib(),
+		DiskTotalGiB:   req.GetDiskTotalGib(),
+		Hostname:       req.GetHostname(),
+		OS:             req.GetOs(),
+		Arch:           req.GetArch(),
+		KernelVersion:  req.GetKernelVersion(),
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	return &atellarv1.ReportNodeHardwareResponse{}, nil
+}
+
+func workloadToProto(w container.Entity) *atellarv1.Workload {
+	out := &atellarv1.Workload{
+		Id:            w.ID,
+		Image:         w.Image,
+		Command:       w.Command,
+		Entrypoint:    w.Entrypoint,
+		Env:           w.Env,
+		ContainerdNs:  w.ContainerdNs,
+		Status:        string(w.Status),
+		RestartPolicy: string(w.RestartPolicy),
+		OverlayIp:     w.OverlayIP.String(),
+		RestartCount:  w.RestartCount,
+		CpuShares:     w.CpuShares,
+		ErrorMessage:  derefString(w.ErrorMessage),
+	}
+	if w.WorkingDir != nil {
+		out.WorkingDir = *w.WorkingDir
+	}
+	if w.ImageDigest != nil {
+		out.ImageDigest = *w.ImageDigest
+	}
+	if w.CpuLimit != nil {
+		out.CpuLimit = *w.CpuLimit
+	}
+	if w.MemoryLimitMiB != nil {
+		out.MemoryLimitMib = *w.MemoryLimitMiB
+	}
+	if w.LastFailedAt != nil {
+		out.LastFailedAtUnix = w.LastFailedAt.Unix()
+	}
+	return out
+}
+
+func optionalString(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
+}
+
+func optionalInt32(v int32) *int32 {
+	if v == 0 {
+		return nil
+	}
+	return &v
+}
+
+func parseOverlayIP(v string) net.IP {
+	if v == "" {
+		return nil
+	}
+	return net.ParseIP(v)
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }

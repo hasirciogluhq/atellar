@@ -16,6 +16,31 @@ Node-side process. Reads `/etc/atellar/agent.json` only — no env vars, no HTTP
 cfg.ResolveGrpcAddr()  // → "cp-host:9090"
 ```
 
+## gRPC API (agent → control plane)
+
+| RPC | Purpose |
+|-----|---------|
+| `Connect` | Heartbeat + `reconcile.trigger` stream |
+| `GetNodeWorkloads` | Poll workloads for this node (15s) |
+| `ReportContainerRuntime` | Report status at every lifecycle step |
+| `AllocateContainerOverlayIP` | Request overlay IP after containerd create |
+| `ReportNodeHardware` | CPU/RAM/disk/hostname on start + every 10m |
+| `RenewNodeAPIKey` | Token renewal |
+
+Push events on stream: `workload.dispatch`, `workload.removed` (trigger immediate reconcile).
+
+## Container runtime pipeline
+
+1. `pulling` — image pull (skip if digest matches)
+2. `creating` — prepare containerd container
+3. `AllocateContainerOverlayIP` — CP assigns overlay IP from node pool
+4. veth + netns setup (`internal/agent/netns`)
+5. `running` — containerd task start + report PID/digest
+
+On failure: `backoff` with exponential delay (max 5 retries) → `failed`.
+
+On `DELETE /containers/:id`: CP sets `removed` → agent terminates, cleans netns/containerd, reports `terminated`.
+
 ## Config example (after join)
 
 ```json
@@ -35,15 +60,6 @@ cfg.ResolveGrpcAddr()  // → "cp-host:9090"
   "reconcile_interval": "30s"
 }
 ```
-
-All three control plane fields are **required** in config.
-
-## Runtime
-
-1. Load config
-2. gRPC `Connect` to `control_plane_address:grpc_port`
-3. Heartbeat + `reconcile.trigger` handling
-4. Overlay reconcile + containerd (when enabled)
 
 ## Node setup (atelctl)
 

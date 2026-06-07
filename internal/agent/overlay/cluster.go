@@ -11,6 +11,8 @@ const (
 	nodeStatusDown      = "down"
 	containerStatusScheduled = "scheduled"
 	containerStatusPending   = "pending"
+	containerStatusBackoff   = "backoff"
+	containerStatusFailed    = "failed"
 	containerStatusPulling   = "pulling"
 	containerStatusCreating  = "creating"
 	containerStatusRunning   = "running"

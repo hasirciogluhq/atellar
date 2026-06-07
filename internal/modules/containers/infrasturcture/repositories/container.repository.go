@@ -38,7 +38,12 @@ func (r *ContainerRepository) CreateContainer(ctx context.Context, input ports.C
 
 	restartPolicy := string(input.RestartPolicy)
 	if restartPolicy == "" {
-		restartPolicy = string(container.RestartPolicyNo)
+		restartPolicy = string(container.RestartPolicyOnFailure)
+	}
+
+	status := input.Status
+	if status == "" {
+		status = container.StatusPending
 	}
 
 	cpuShares := int32(1024)
@@ -64,6 +69,7 @@ func (r *ContainerRepository) CreateContainer(ctx context.Context, input ports.C
 		MemoryLimitMib: pgutil.Int32PtrToInt4(input.MemoryLimitMiB),
 		RestartPolicy:  restartPolicy,
 		ContainerdNs:   containerdNs,
+		Status:         db_generated.ContainerStatus(status),
 	})
 	if err != nil {
 		fmt.Println("Error creating container: ", err)
@@ -95,6 +101,60 @@ func (r *ContainerRepository) ListContainers(ctx context.Context) ([]container.E
 	}
 
 	return parseContainers(rows), nil
+}
+
+func (r *ContainerRepository) ListWorkloadsByNodeId(ctx context.Context, nodeID string) ([]container.Entity, error) {
+	rows, err := r.queries.ListWorkloadsByNodeId(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	return parseContainers(rows), nil
+}
+
+func (r *ContainerRepository) ScheduleContainer(ctx context.Context, containerID string) (*container.Entity, error) {
+	row, err := r.queries.ScheduleContainer(ctx, containerID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return parseContainer(row), nil
+}
+
+func (r *ContainerRepository) MarkContainerRemoved(ctx context.Context, containerID string) (*container.Entity, error) {
+	row, err := r.queries.MarkContainerRemoved(ctx, containerID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return parseContainer(row), nil
+}
+
+func (r *ContainerRepository) NodeResourceUsage(ctx context.Context, nodeID string) (*ports.NodeResourceUsage, error) {
+	count, err := r.queries.CountRunningContainersByNodeId(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	totals, err := r.queries.SumContainerResourcesByNodeId(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	cpu, _ := totals.TotalCpu.Float64Value()
+	return &ports.NodeResourceUsage{
+		RunningCount:   int(count),
+		TotalCPU:       cpu.Float64,
+		TotalMemoryMiB: totals.TotalMemoryMib,
+	}, nil
+}
+
+func (r *ContainerRepository) HasContainerWithImageOnNode(ctx context.Context, nodeID, image string) (bool, error) {
+	return r.queries.HasContainerWithImageOnNode(ctx, db_generated.HasContainerWithImageOnNodeParams{
+		NodeID: nodeID,
+		Image:  image,
+	})
 }
 
 func (r *ContainerRepository) ListContainersByNodeId(ctx context.Context, nodeID string) ([]container.Entity, error) {
@@ -141,6 +201,7 @@ func (r *ContainerRepository) UpdateContainerRuntime(ctx context.Context, contai
 		ExitCode:     pgutil.Int32PtrToInt4(input.ExitCode),
 		ErrorMessage: pgutil.StringToText(input.ErrorMessage),
 		RestartCount: restartCount,
+		LastFailedAt: pgutil.TimeToTimestamptz(input.LastFailedAt),
 		ScheduledAt:  pgutil.TimeToTimestamptz(input.ScheduledAt),
 		StartedAt:    pgutil.TimeToTimestamptz(input.StartedAt),
 		StoppedAt:    pgutil.TimeToTimestamptz(input.StoppedAt),
@@ -268,6 +329,28 @@ func (r *ContainerRepository) AllocateOverlayIP(ctx context.Context, ip net.IP, 
 	return parseOverlayIPPool(row), nil
 }
 
+func (r *ContainerRepository) CountFreeOverlayIPsByNodeId(ctx context.Context, nodeID string) (int, error) {
+	count, err := r.queries.CountFreeOverlayIPsByNodeId(ctx, nodeID)
+	if err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
+func (r *ContainerRepository) AllocateFirstFreeOverlayIP(ctx context.Context, nodeID, containerID string) (*overlayippool.Entity, error) {
+	row, err := r.queries.AllocateFirstFreeOverlayIP(ctx, db_generated.AllocateFirstFreeOverlayIPParams{
+		NodeID:      nodeID,
+		ContainerID: pgutil.OptionalStringToText(containerID),
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return parseOverlayIPPool(row), nil
+}
+
 func (r *ContainerRepository) ReleaseOverlayIP(ctx context.Context, ip net.IP) error {
 	addr := pgutil.NetIPToAddr(ip)
 	if addr == nil {
@@ -321,6 +404,7 @@ func parseContainer(row db_generated.Container) *container.Entity {
 		ErrorMessage:   pgutil.TextToString(row.ErrorMessage),
 		RestartCount:   row.RestartCount,
 		RestartPolicy:  container.RestartPolicy(row.RestartPolicy),
+		LastFailedAt:   pgutil.TimestamptzToTime(row.LastFailedAt),
 		CreatedAt:      row.CreatedAt.Time,
 		UpdatedAt:      row.UpdatedAt.Time,
 		ScheduledAt:    pgutil.TimestamptzToTime(row.ScheduledAt),

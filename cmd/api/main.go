@@ -79,10 +79,11 @@ func main() {
 	go func() {
 		log.Printf("grpc server listening on :%s", config.GRPCPort)
 		if err := grpcserver.ListenAndServe(config.GRPCPort, grpcserver.Deps{
-			NodeAuth:      infra.NodeAuth,
-			Nodes:         infra.Repositories.Nodes,
-			Containers:    infra.Repositories.Containers,
-			AgentRegistry: infra.AgentRegistry,
+			NodeAuth:              infra.NodeAuth,
+			Nodes:                 infra.Repositories.Nodes,
+			Containers:            infra.Repositories.Containers,
+			AgentRegistry:         infra.AgentRegistry,
+			ContainerPeerNotifier: infra.ContainerPeerNotifier,
 		}); err != nil {
 			panic(err)
 		}
