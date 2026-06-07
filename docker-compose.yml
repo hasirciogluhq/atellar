@@ -7,7 +7,7 @@ services:
       - "8080:8080"
       - "9090:9090"
     environment:
-      DATABASE_URL: postgresql://postgres:1234@host.docker.internal:5432/atellar_cp?sslmode=disable
+      DATABASE_URL: postgresql://postgres:1234@host.docker.internal:5432/atellar_test?sslmode=disable
       MIGRATIONS_PATH: /usr/share/atellar/migrations
       PORT: "8080"
       GRPC_PORT: "9090"

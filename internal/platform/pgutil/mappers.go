@@ -16,6 +16,13 @@ func NetIPToAddr(ip net.IP) *netip.Addr {
 		return nil
 	}
 
+	if ip4 := ip.To4(); ip4 != nil {
+		var b [4]byte
+		copy(b[:], ip4)
+		addr := netip.AddrFrom4(b)
+		return &addr
+	}
+
 	addr, ok := netip.AddrFromSlice(ip)
 	if !ok {
 		return nil
@@ -29,7 +36,13 @@ func AddrToNetIP(addr *netip.Addr) net.IP {
 		return nil
 	}
 
-	return addr.AsSlice()
+	unmapped := addr.Unmap()
+	if unmapped.Is4() {
+		b := unmapped.As4()
+		return net.IP{b[0], b[1], b[2], b[3]}
+	}
+
+	return net.IP(unmapped.AsSlice())
 }
 
 func PrefixToString(prefix *netip.Prefix) string {

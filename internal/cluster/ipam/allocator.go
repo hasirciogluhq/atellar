@@ -211,7 +211,12 @@ func ipToUint32(ip net.IP) uint32 {
 }
 
 func uint32ToIP(value uint32) net.IP {
-	return net.IPv4(byte(value>>24), byte(value>>16), byte(value>>8), byte(value))
+	return net.IP{
+		byte(value >> 24),
+		byte(value >> 16),
+		byte(value >> 8),
+		byte(value),
+	}
 }
 
 func mask32(mask net.IPMask) uint32 {
