@@ -30,18 +30,18 @@ Save the `token` value from the response — it is shown only once.
 
 ## 3. Install from release
 
-Each GitHub release ships `install.sh` plus binaries (`atellar-api`, `atellar-agent`, `atelctl`) and DB migrations. The installer only copies files — it does not start services.
+Each GitHub release ships `install.sh` and a universal `atellar_<ver>_linux.tar.gz` with **amd64 + arm64** binaries. The installer auto-detects your architecture — it only copies files, does not start services.
 
 ```bash
+# latest release, auto arch (amd64/arm64)
 curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
-# prompts: Kurulacak versiyon (örn. v0.1.0):
 ```
 
 Or from an extracted tarball:
 
 ```bash
-tar xzf atellar_0.1.0_linux_amd64.tar.gz
-cd atellar_0.1.0_linux_amd64
+tar xzf atellar_0.1.0_linux.tar.gz
+cd atellar_0.1.0_linux
 sudo ./install.sh --local
 ```
 

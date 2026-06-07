@@ -14,7 +14,7 @@ curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
   -H "Content-Type: application/json" \
   -d '{"single_use": true}'
 
-# 3. Install binaries from GitHub release (prompts for version)
+# 3. Install binaries from GitHub release (auto amd64/arm64)
 curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
 
 # 4. Start control plane, then join agent (see docs/getting-started.md)

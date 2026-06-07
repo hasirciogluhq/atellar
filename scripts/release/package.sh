@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build release tarball for maintainers (CI / local).
+# Build a universal linux release tarball (amd64 + arm64).
 # Usage: ./scripts/release/package.sh v0.1.0
 
 VERSION="${1:-}"
@@ -9,18 +9,37 @@ VERSION="${1:-}"
 
 VERSION_TAG="${VERSION#v}"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-DIST="${REPO_ROOT}/dist/atellar_${VERSION_TAG}_linux_amd64"
+PKG_NAME="atellar_${VERSION_TAG}_linux"
+DIST="${REPO_ROOT}/dist/${PKG_NAME}"
+
+PLATFORMS=(
+  "linux amd64"
+  "linux arm64"
+)
 
 rm -rf "${DIST}"
-mkdir -p "${DIST}/bin" "${DIST}/migrations"
+mkdir -p "${DIST}/migrations"
 
-echo "building linux/amd64 binaries..."
-(
-  cd "${REPO_ROOT}"
-  GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${DIST}/bin/atellar-api" ./cmd/api
-  GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${DIST}/bin/atellar-agent" ./cmd/agent
-  GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${DIST}/bin/atelctl" ./cmd/atelctl
-)
+build_binaries() {
+  local goos="$1"
+  local goarch="$2"
+  local out_dir="${DIST}/${goarch}/bin"
+
+  mkdir -p "${out_dir}"
+  echo "building ${goos}/${goarch}..."
+  (
+    cd "${REPO_ROOT}"
+    export GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0
+    go build -trimpath -ldflags="-s -w" -o "${out_dir}/atellar-api" ./cmd/api
+    go build -trimpath -ldflags="-s -w" -o "${out_dir}/atellar-agent" ./cmd/agent
+    go build -trimpath -ldflags="-s -w" -o "${out_dir}/atelctl" ./cmd/atelctl
+  )
+}
+
+for entry in "${PLATFORMS[@]}"; do
+  read -r goos goarch <<<"${entry}"
+  build_binaries "${goos}" "${goarch}"
+done
 
 cp -a "${REPO_ROOT}/internal/db/migrations/." "${DIST}/migrations/"
 cp "${REPO_ROOT}/scripts/release/install.sh" "${DIST}/install.sh"
@@ -28,8 +47,9 @@ cp "${REPO_ROOT}/scripts/release/uninstall.sh" "${DIST}/uninstall.sh"
 chmod +x "${DIST}/install.sh" "${DIST}/uninstall.sh"
 echo "${VERSION}" >"${DIST}/VERSION"
 
-OUT="${REPO_ROOT}/dist/atellar_${VERSION_TAG}_linux_amd64.tar.gz"
-tar -czf "${OUT}" -C "${REPO_ROOT}/dist" "atellar_${VERSION_TAG}_linux_amd64"
+OUT="${REPO_ROOT}/dist/${PKG_NAME}.tar.gz"
+tar -czf "${OUT}" -C "${REPO_ROOT}/dist" "${PKG_NAME}"
 
 echo "created ${OUT}"
-echo "upload to GitHub release v${VERSION_TAG} with install.sh + tarball"
+echo "  amd64: ${DIST}/amd64/bin/"
+echo "  arm64: ${DIST}/arm64/bin/"

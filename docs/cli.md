@@ -85,13 +85,13 @@ atelctl cluster nodes list \
 
 Each GitHub release includes `install.sh` and `uninstall.sh` (also under `scripts/release/` in the repo).
 
-`install.sh` only installs binaries and migrations. It prompts for a version and does not start services.
+`install.sh` only installs binaries and migrations. Auto-detects `linux/amd64` or `linux/arm64` from the universal tarball. Does not start services.
 
 ```bash
-# interactive — asks for version
+# latest release (auto-detect arch, no prompt when piped)
 curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
 
-# non-interactive
+# specific version
 curl -fsSL .../install.sh | sudo bash -s -- --version v0.1.0
 
 # from extracted tarball
@@ -103,7 +103,7 @@ sudo ./uninstall.sh --yes
 
 `uninstall.sh` does **not** delete the node from control plane PostgreSQL — use evict API on the CP.
 
-Maintainers: `./scripts/release/package.sh v0.1.0` builds `dist/atellar_0.1.0_linux_amd64.tar.gz`.
+Maintainers: push a `v*` tag — GitHub Actions builds `atellar_<ver>_linux.tar.gz` (amd64 + arm64 inside) and publishes `install.sh`. Local: `./scripts/release/build-all.sh v0.1.0`.
 
 ## Related code
 
