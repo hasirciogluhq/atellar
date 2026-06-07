@@ -39,24 +39,35 @@ sudo cp atellar-agent /usr/local/bin/
 sudo go run ./cmd/atelctl agent install \
   --auto-join \
   --join-token <PLAIN_TOKEN> \
-  --control-plane-url http://<cp-host>:8080 \
-  --name node-1
+  --control-plane-address <cp-host> \
+  --http-port 8080 \
+  --grpc-port 9090 \
+  --name node-1 \
+  --public-ip 203.0.113.10 \
+  --private-ip 10.0.0.5
 ```
 
-`install` creates dirs + systemd unit. With `--auto-join` it also registers the node and writes `/etc/atellar/agent.json`.
+`install` creates dirs + systemd unit (binary must already be at `/usr/local/bin/atellar-agent`). With `--auto-join` it chains into `join` and writes `/etc/atellar/agent.json`.
 
 Or separately:
 
 ```bash
 sudo go run ./cmd/atelctl agent install
-atelctl agent join --join-token <PLAIN_TOKEN> --name node-1
+atelctl agent join \
+  --join-token <PLAIN_TOKEN> \
+  --control-plane-address <cp-host> \
+  --http-port 8080 \
+  --grpc-port 9090 \
+  --name node-1 \
+  --public-ip 203.0.113.10 \
+  --private-ip 10.0.0.5
 ```
 
 ## 5. Verify
 
 ```bash
 # List nodes
-atelctl cluster nodes list
+atelctl cluster nodes list --control-plane-address localhost --http-port 8080 --grpc-port 9090
 # or: curl http://localhost:8080/api/v1/nodes
 
 # Agent logs

@@ -4,45 +4,49 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/hasirciogluhq/atellar/pkg/client"
 )
 
 const (
 	DefaultFileName  = "agent.json"
 	SystemConfigDir  = "/etc/atellar"
 	SystemConfigPath = SystemConfigDir + "/" + DefaultFileName
-	DefaultGrpcPort  = "9090"
 )
 
 type Config struct {
-	ControlPlaneURL   string    `json:"control_plane_url"`
-	GrpcAddr          string    `json:"grpc_addr,omitempty"`
-	NodeID            string    `json:"node_id"`
-	NodeName          string    `json:"node_name,omitempty"`
-	OverlayIP         string    `json:"overlay_ip,omitempty"`
-	OverlaySubnet     string    `json:"overlay_subnet,omitempty"`
-	NodeAPIKey        string    `json:"node_api_key"`
-	APIKeyExpiresAt   time.Time `json:"api_key_expires_at"`
-	ContainerdSock    string    `json:"containerd_sock,omitempty"`
-	HeartbeatInterval string    `json:"heartbeat_interval,omitempty"`
-	BridgeName        string    `json:"bridge_name,omitempty"`
-	ReconcileInterval string    `json:"reconcile_interval,omitempty"`
+	ControlPlaneAddress string    `json:"control_plane_address"`
+	HTTPPort            int       `json:"http_port"`
+	GRPCPort            int       `json:"grpc_port"`
+	NodeID              string    `json:"node_id"`
+	NodeName            string    `json:"node_name,omitempty"`
+	OverlayIP           string    `json:"overlay_ip,omitempty"`
+	OverlaySubnet       string    `json:"overlay_subnet,omitempty"`
+	NodeAPIKey          string    `json:"node_api_key"`
+	APIKeyExpiresAt     time.Time `json:"api_key_expires_at"`
+	ContainerdSock      string    `json:"containerd_sock,omitempty"`
+	HeartbeatInterval   string    `json:"heartbeat_interval,omitempty"`
+	BridgeName          string    `json:"bridge_name,omitempty"`
+	ReconcileInterval   string    `json:"reconcile_interval,omitempty"`
+}
+
+func (c *Config) ControlPlane() client.ControlPlane {
+	return client.ControlPlane{
+		Address:  c.ControlPlaneAddress,
+		HTTPPort: c.HTTPPort,
+		GRPCPort: c.GRPCPort,
+	}
+}
+
+func (c *Config) HTTPBaseURL() string {
+	return c.ControlPlane().HTTPBaseURL()
 }
 
 func (c *Config) ResolveGrpcAddr() string {
-	if c.GrpcAddr != "" {
-		return c.GrpcAddr
-	}
-
-	parsed, err := url.Parse(c.ControlPlaneURL)
-	if err != nil || parsed.Host == "" {
-		return "localhost:" + DefaultGrpcPort
-	}
-
-	return parsed.Hostname() + ":" + DefaultGrpcPort
+	return c.ControlPlane().GRPCAddr()
 }
 
 func (c *Config) ResolveBridgeName() string {
@@ -93,8 +97,8 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
-	if cfg.ControlPlaneURL == "" {
-		return nil, errors.New("control_plane_url is required in config")
+	if err := cfg.ControlPlane().Validate(); err != nil {
+		return nil, fmt.Errorf("invalid control plane config: %w", err)
 	}
 
 	if cfg.NodeID == "" {

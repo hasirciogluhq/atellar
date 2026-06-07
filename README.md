@@ -18,7 +18,9 @@ curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
 go build -o atellar-agent ./cmd/agent
 sudo cp atellar-agent /usr/local/bin/
 sudo go run ./cmd/atelctl agent install \
-  --auto-join --join-token <PLAIN_TOKEN> --name node-1
+  --auto-join --join-token <PLAIN_TOKEN> --name node-1 \
+  --public-ip <PUBLIC_IP> --private-ip <PRIVATE_IP> \
+  --control-plane-address <CP_HOST> --http-port 8080 --grpc-port 9090
 ```
 
 ## Components

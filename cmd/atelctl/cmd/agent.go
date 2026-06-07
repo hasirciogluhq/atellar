@@ -6,6 +6,7 @@ import (
 
 	"github.com/hasirciogluhq/atellar/internal/agent/config"
 	"github.com/hasirciogluhq/atellar/internal/atelctl/agent"
+	"github.com/hasirciogluhq/atellar/pkg/client"
 	"github.com/spf13/cobra"
 )
 
@@ -15,25 +16,27 @@ var agentCmd = &cobra.Command{
 }
 
 var (
-	joinToken         string
-	controlPlaneURL   string
-	nodeName          string
-	publicIP          string
-	privateIP         string
-	containerdSocket  string
-	heartbeatInterval string
+	joinToken            string
+	controlPlaneAddress  string
+	httpPort             int
+	grpcPort             int
+	nodeName             string
+	publicIP             string
+	privateIP            string
+	containerdSocket     string
+	heartbeatInterval    string
 
 	installAutoJoin bool
-
-	renewControlPlaneURL string
-	renewAPIKey          string
-	renewUpdateConfig    bool
 )
 
 func joinOptions() agent.JoinOptions {
 	return agent.JoinOptions{
-		JoinToken:         joinToken,
-		ControlPlaneURL:   controlPlaneURL,
+		JoinToken: joinToken,
+		ControlPlane: client.ControlPlane{
+			Address:  controlPlaneAddress,
+			HTTPPort: httpPort,
+			GRPCPort: grpcPort,
+		},
 		NodeName:          nodeName,
 		PublicIP:          publicIP,
 		PrivateIP:         privateIP,
@@ -75,7 +78,7 @@ var agentInstallCmd = &cobra.Command{
 		if result.NodeID != "" {
 			fmt.Printf("  node_id: %s\n  config: %s\n", result.NodeID, config.SystemConfigPath)
 		} else {
-			fmt.Printf("\nnext: atelctl agent join --join-token <TOKEN> --name <NODE_NAME> --public-ip <IP> --private-ip <IP>\n")
+			fmt.Printf("\nnext: atelctl agent join --join-token <TOKEN> --name <NODE> --public-ip <IP> --private-ip <IP> --control-plane-address <HOST> --http-port <PORT> --grpc-port <PORT>\n")
 		}
 		return nil
 	},
@@ -85,11 +88,7 @@ var agentRenewKeyCmd = &cobra.Command{
 	Use:   "renew-key",
 	Short: "Renew the node API key",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := agent.RenewKey(context.Background(), agent.RenewKeyOptions{
-			ControlPlaneURL: renewControlPlaneURL,
-			NodeAPIKey:      renewAPIKey,
-			UpdateConfig:    renewUpdateConfig,
-		})
+		result, err := agent.RenewKey(context.Background())
 		if err != nil {
 			return err
 		}
@@ -102,7 +101,9 @@ var agentRenewKeyCmd = &cobra.Command{
 
 func init() {
 	agentCmd.PersistentFlags().StringVar(&joinToken, "join-token", "", "cluster join token")
-	agentCmd.PersistentFlags().StringVar(&controlPlaneURL, "control-plane-url", "http://localhost:8080", "control plane URL")
+	agentCmd.PersistentFlags().StringVar(&controlPlaneAddress, "control-plane-address", "", "control plane host or IP")
+	agentCmd.PersistentFlags().IntVar(&httpPort, "http-port", 0, "control plane HTTP port")
+	agentCmd.PersistentFlags().IntVar(&grpcPort, "grpc-port", 0, "control plane gRPC port")
 	agentCmd.PersistentFlags().StringVar(&nodeName, "name", "", "node name")
 	agentCmd.PersistentFlags().StringVar(&publicIP, "public-ip", "", "node public IP address")
 	agentCmd.PersistentFlags().StringVar(&privateIP, "private-ip", "", "node private IP address")
@@ -111,11 +112,10 @@ func init() {
 
 	agentInstallCmd.Flags().BoolVar(&installAutoJoin, "auto-join", false, "run join after install")
 
-	agentRenewKeyCmd.Flags().StringVar(&renewControlPlaneURL, "control-plane-url", "", "control plane URL")
-	agentRenewKeyCmd.Flags().StringVar(&renewAPIKey, "api-key", "", "current node api key")
-	agentRenewKeyCmd.Flags().BoolVar(&renewUpdateConfig, "update-config", true, "write renewed key to config")
-
-	for _, flag := range []string{"join-token", "name", "public-ip", "private-ip"} {
+	for _, flag := range []string{
+		"join-token", "name", "public-ip", "private-ip",
+		"control-plane-address", "http-port", "grpc-port",
+	} {
 		_ = agentJoinCmd.MarkPersistentFlagRequired(flag)
 	}
 

@@ -3,7 +3,7 @@
 ```
 atelctl
 ├── agent
-│   ├── install           # dirs + systemd (optional --auto-join)
+│   ├── install           # dirs + systemd (+ optional --auto-join → Join chain)
 │   ├── join              # register + write /etc/atellar/agent.json
 │   └── renew-key
 └── cluster
@@ -11,56 +11,77 @@ atelctl
     └── containers list
 ```
 
-Fixed paths (no flags):
-- Agent binary: `/usr/local/bin/atellar-agent`
-- Config: `/etc/atellar/agent.json`
-- Logs: `/var/log/atellar`
+## Control plane connection
+
+Address and ports are **separate and required** on join / cluster commands:
+
+| Flag | Description |
+|------|-------------|
+| `--control-plane-address` | Host or IP (no scheme) |
+| `--http-port` | HTTP API port (atelctl → register, list) |
+| `--grpc-port` | gRPC port (agent stream) |
+
+Join writes all three into `/etc/atellar/agent.json`. Agent dials `address:grpc_port`; atelctl HTTP uses `http://address:http_port`.
+
+## Fixed paths
+
+| What | Path |
+|------|------|
+| Agent binary | `/usr/local/bin/atellar-agent` |
+| Agent config | `/etc/atellar/agent.json` |
+| Agent logs | `/var/log/atellar` |
+
+## Required join flags
+
+- `--join-token`
+- `--name`
+- `--public-ip`
+- `--private-ip`
+- `--control-plane-address`
+- `--http-port`
+- `--grpc-port`
+
+Same flags required on **`agent install --auto-join`**.
+
+`cluster` commands require: `--control-plane-address`, `--http-port`, `--grpc-port`.
 
 ## Flow
 
 ```bash
-# 1. put binary on the node
 sudo cp atellar-agent /usr/local/bin/
 
-# 2. install service (+ optional join)
 sudo atelctl agent install \
   --auto-join \
   --join-token <TOKEN> \
   --name node-1 \
   --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5
+  --private-ip 10.0.0.5 \
+  --control-plane-address cp-host \
+  --http-port 8080 \
+  --grpc-port 9090
 
-# or separately:
+# or separate
 sudo atelctl agent install
 atelctl agent join \
   --join-token <TOKEN> \
   --name node-1 \
   --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5
+  --private-ip 10.0.0.5 \
+  --control-plane-address cp-host \
+  --http-port 8080 \
+  --grpc-port 9090
 ```
-
-## `agent install`
-
-Creates `/etc/atellar`, `/var/log/atellar`, writes `atellar-agent.service`, enables it.
-
-Requires `atellar-agent` already at `/usr/local/bin/atellar-agent`.
-
-| Flag | Description |
-|------|-------------|
-| `--auto-join` | join after install |
-| `--control-plane-url` | default `http://localhost:8080` |
-
-With `--auto-join`, these are **required**: `--join-token`, `--name`, `--public-ip`, `--private-ip`.
-
-## `agent join`
-
-Writes full config to `/etc/atellar/agent.json` and restarts the agent service.
-
-**Required:** `--join-token`, `--name`, `--public-ip`, `--private-ip`
 
 ## Cluster
 
 ```bash
-atelctl cluster nodes list
-atelctl cluster containers list --node-id <ID>
+atelctl cluster nodes list \
+  --control-plane-address cp-host \
+  --http-port 8080 \
+  --grpc-port 9090
 ```
+
+## Related code
+
+- `pkg/client/controlplane.go` — `ControlPlane`, `HTTPBaseURL()`, `GRPCAddr()`
+- `internal/agent/config/` — persisted agent config

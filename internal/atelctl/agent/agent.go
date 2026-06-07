@@ -19,7 +19,7 @@ const (
 
 type JoinOptions struct {
 	JoinToken         string
-	ControlPlaneURL   string
+	ControlPlane      client.ControlPlane
 	NodeName          string
 	PublicIP          string
 	PrivateIP         string
@@ -40,17 +40,15 @@ func ValidateJoinOptions(opts JoinOptions) error {
 	if opts.PrivateIP == "" {
 		return fmt.Errorf("--private-ip is required")
 	}
+	if err := opts.ControlPlane.Validate(); err != nil {
+		return fmt.Errorf("--control-plane-address, --http-port, --grpc-port: %w", err)
+	}
 	return nil
 }
 
 func Join(ctx context.Context, opts JoinOptions) (*config.Config, error) {
 	if err := ValidateJoinOptions(opts); err != nil {
 		return nil, err
-	}
-
-	controlPlaneURL := opts.ControlPlaneURL
-	if controlPlaneURL == "" {
-		controlPlaneURL = "http://localhost:8080"
 	}
 
 	containerdSocket := opts.ContainerdSocket
@@ -71,7 +69,7 @@ func Join(ctx context.Context, opts JoinOptions) (*config.Config, error) {
 		return nil, err
 	}
 
-	api := client.New(client.Options{BaseURL: controlPlaneURL})
+	api := client.New(client.Options{BaseURL: opts.ControlPlane.HTTPBaseURL()})
 	result, err := api.RegisterNode(ctx, opts.JoinToken, client.RegisterNodeRequest{
 		Name:           opts.NodeName,
 		PublicIP:       opts.PublicIP,
@@ -84,15 +82,17 @@ func Join(ctx context.Context, opts JoinOptions) (*config.Config, error) {
 	}
 
 	cfg := config.Config{
-		ControlPlaneURL:   controlPlaneURL,
-		NodeID:            result.Node.ID,
-		NodeName:          result.Node.Name,
-		OverlayIP:         result.Node.OverlayIP,
-		OverlaySubnet:     result.Node.OverlaySubnet,
-		NodeAPIKey:        result.NodeAPIKey,
-		APIKeyExpiresAt:   result.APIKeyExpiresAt,
-		ContainerdSock:    containerdSocket,
-		HeartbeatInterval: interval,
+		ControlPlaneAddress: opts.ControlPlane.Address,
+		HTTPPort:            opts.ControlPlane.HTTPPort,
+		GRPCPort:            opts.ControlPlane.GRPCPort,
+		NodeID:              result.Node.ID,
+		NodeName:            result.Node.Name,
+		OverlayIP:           result.Node.OverlayIP,
+		OverlaySubnet:       result.Node.OverlaySubnet,
+		NodeAPIKey:          result.NodeAPIKey,
+		APIKeyExpiresAt:     result.APIKeyExpiresAt,
+		ContainerdSock:      containerdSocket,
+		HeartbeatInterval:   interval,
 	}
 
 	if err := config.Save(config.SystemConfigPath, cfg); err != nil {
@@ -149,51 +149,25 @@ func Install(ctx context.Context, autoJoin bool, join JoinOptions) (*InstallResu
 	return result, nil
 }
 
-type RenewKeyOptions struct {
-	ControlPlaneURL string
-	NodeAPIKey      string
-	UpdateConfig    bool
-}
-
 type RenewKeyResult struct {
 	NodeAPIKey      string
 	APIKeyExpiresAt string
 }
 
-func RenewKey(ctx context.Context, opts RenewKeyOptions) (*RenewKeyResult, error) {
-	controlPlaneURL := opts.ControlPlaneURL
-	apiKey := opts.NodeAPIKey
-
-	if opts.UpdateConfig || (controlPlaneURL == "" && apiKey == "") {
-		cfg, err := config.Load(config.SystemConfigPath)
-		if err != nil {
-			return nil, fmt.Errorf("load config: %w", err)
-		}
-		if controlPlaneURL == "" {
-			controlPlaneURL = cfg.ControlPlaneURL
-		}
-		if apiKey == "" {
-			apiKey = cfg.NodeAPIKey
-		}
+func RenewKey(ctx context.Context) (*RenewKeyResult, error) {
+	cfg, err := config.Load(config.SystemConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("load config: %w", err)
 	}
 
-	if controlPlaneURL == "" {
-		return nil, fmt.Errorf("control plane url is required")
-	}
-	if apiKey == "" {
-		return nil, fmt.Errorf("node api key is required")
-	}
-
-	api := client.New(client.Options{BaseURL: controlPlaneURL})
-	renewed, err := api.RenewNodeAPIKey(ctx, apiKey)
+	api := client.New(client.Options{BaseURL: cfg.HTTPBaseURL()})
+	renewed, err := api.RenewNodeAPIKey(ctx, cfg.NodeAPIKey)
 	if err != nil {
 		return nil, err
 	}
 
-	if opts.UpdateConfig {
-		if err := config.UpdateNodeAPIKey(config.SystemConfigPath, renewed.NodeAPIKey, renewed.APIKeyExpiresAt); err != nil {
-			return nil, fmt.Errorf("update config: %w", err)
-		}
+	if err := config.UpdateNodeAPIKey(config.SystemConfigPath, renewed.NodeAPIKey, renewed.APIKeyExpiresAt); err != nil {
+		return nil, fmt.Errorf("update config: %w", err)
 	}
 
 	return &RenewKeyResult{

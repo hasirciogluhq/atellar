@@ -40,7 +40,7 @@ func NewManager(cfg ManagerConfig, syncer ClusterSyncer) (*Manager, error) {
 	}
 
 	if cfg.ReconcileInterval <= 0 {
-		cfg.ReconcileInterval = 30 * time.Second
+		cfg.ReconcileInterval = 10 * time.Second
 	}
 
 	local, err := parseLocalNode(cfg)

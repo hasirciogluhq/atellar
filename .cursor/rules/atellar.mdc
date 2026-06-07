@@ -1,0 +1,96 @@
+---
+description: Atellar project conventions — layout, atelctl, agent, client, code style
+alwaysApply: true
+---
+
+# Atellar conventions
+
+## Code style
+
+- Minimal, modern, solid code. Do **not** over-split files or abstractions.
+- Match existing naming and patterns. Read files before editing.
+- Docs and code comments: **English**. User-facing chat: **Turkish**.
+- Do not auto-commit unless explicitly asked.
+
+## Repository layout
+
+```
+cmd/api          control plane
+cmd/agent        node agent (atellar-agent)
+cmd/atelctl      operator CLI
+internal/modules nodes, containers (domain)
+internal/agent   everything on-node (config, grpcclient, overlay, runtime)
+internal/atelctl atelctl command logic
+internal/cluster/ipam  control-plane overlay IPAM only
+internal/grpc    server, agentregistry, gen
+pkg/client       global HTTP API client (extend stub; no internal/client/controlplane)
+```
+
+**Dependency direction: top → down.** `agent/*` must NOT import `modules/*` or domain entities. Agent overlay uses local DTOs.
+
+**Never** put node network code under `pkg/` or a generic `internal/pkg/`. Future: `internal/agent/netns`, `internal/agent/vmnet`.
+
+## Transport split
+
+| Component | Transport |
+|-----------|-----------|
+| `atellar-agent` | gRPC only to control plane |
+| `atelctl`, plugins | HTTP via `pkg/client.AtellarClient` |
+| Control plane | HTTP `:8080` + gRPC `:9090` |
+
+## pkg/client
+
+- Build on `pkg/client/client.go` stub (`AtellarClient`, `Token`, `Secret`, `EnsureToken()`).
+- Single global HTTP client for all external API calls. Own JSON DTOs in `pkg/client/types.go` — do not import `internal/modules`.
+- No separate `internal/client/controlplane` package.
+
+## atelctl CLI
+
+Binary name: **atelctl** (`cmd/atelctl`). Structure: `atelctl <domain> <action>`.
+
+```
+atelctl agent install|join|renew-key
+atelctl cluster nodes list|containers list
+```
+
+### agent install
+
+- Creates `/etc/atellar`, `/var/log/atellar`, systemd unit `atellar-agent.service`, enables service.
+- Expects binary already at **`/usr/local/bin/atellar-agent`** — no `--agent-bin`, no `--target`, no `--config` flags.
+- `--auto-join`: after install, chain directly into `Join()` (same code path as `agent join`).
+- With `--auto-join`, required flags: `--join-token`, `--name`, `--public-ip`, `--private-ip`, `--control-plane-address`, `--http-port`, `--grpc-port`.
+
+### agent join
+
+- Registers node via HTTP (`http://address:http_port`), writes **`/etc/atellar/agent.json`**, restarts agent.
+- Required: `--join-token`, `--name`, `--public-ip`, `--private-ip`, `--control-plane-address`, `--http-port`, `--grpc-port`.
+- Config fields: `control_plane_address`, `http_port`, `grpc_port` (all required). Agent gRPC dials `address:grpc_port`.
+- Use **`--join-token`** (not `--token`). Use `pkg/client.ControlPlane` for URL/addr helpers.
+
+### cluster commands
+
+- Required: `--control-plane-address`, `--http-port`, `--grpc-port`.
+
+### Fixed paths (no CLI overrides)
+
+| Path | Value |
+|------|-------|
+| Agent binary | `/usr/local/bin/atellar-agent` |
+| Agent config | `/etc/atellar/agent.json` |
+| Agent logs | `/var/log/atellar` |
+
+### Naming (CLI vars)
+
+Use descriptive names: `heartbeatInterval`, `controlPlaneAddress`, `httpPort`, `grpcPort`, `nodeName`, `publicIP`, `privateIP`, `containerdSocket`, `joinToken`.
+
+Validation: `client.ControlPlane.Validate()` + `agent.ValidateJoinOptions()`.
+
+## Agent
+
+- Reads only `/etc/atellar/agent.json`. No env vars.
+- Dumb node worker: config + gRPC stream + overlay reconcile + containerd (no orchestration decisions).
+- Config is filled by **`atelctl agent join`** (or install `--auto-join`), not by install alone.
+
+## Docs
+
+Keep `docs/cli.md`, `docs/code-layout.md`, `docs/agent.md` aligned with these rules when changing CLI or layout.

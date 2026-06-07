@@ -33,7 +33,9 @@ Details: [agent.md](agent.md)
 
 ```json
 {
-  "control_plane_url": "http://10.0.0.1:8080",
+  "control_plane_address": "10.0.0.1",
+  "http_port": 8080,
+  "grpc_port": 9090,
   "node_id": "a1b2c3d4-...",
   "node_name": "worker-1",
   "overlay_ip": "10.0.0.1",

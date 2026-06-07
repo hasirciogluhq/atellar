@@ -13,6 +13,8 @@
 | [peer-events.md](peer-events.md) | Node and container peer notification events |
 | [code-layout.md](code-layout.md) | Folder structure and dependency rules |
 
+Project conventions for contributors and AI: `.cursor/rules/atellar.mdc`
+
 ## Repository layout (summary)
 
 ```

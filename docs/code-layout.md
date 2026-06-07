@@ -46,7 +46,7 @@ pkg/
 │   └── nodetoken/
 
 └── atelctl/                  # atelctl command implementations
-    ├── agent/                # init, install, renew-key
+    ├── agent/                # install, join, renew-key
     └── cluster/              # nodes/containers list
 ```
 

@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hasirciogluhq/atellar/pkg/client"
 )
@@ -23,16 +22,12 @@ type Container struct {
 	OverlayIP string
 }
 
-func api(controlPlaneURL string) *client.AtellarClient {
-	return client.New(client.Options{BaseURL: controlPlaneURL})
-}
-
-func ListNodes(ctx context.Context, controlPlaneURL string) ([]Node, error) {
-	if controlPlaneURL == "" {
-		return nil, fmt.Errorf("control plane url is required")
+func ListNodes(ctx context.Context, cp client.ControlPlane) ([]Node, error) {
+	if err := cp.Validate(); err != nil {
+		return nil, err
 	}
 
-	nodes, err := api(controlPlaneURL).ListNodes(ctx)
+	nodes, err := client.New(client.Options{BaseURL: cp.HTTPBaseURL()}).ListNodes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -50,12 +45,12 @@ func ListNodes(ctx context.Context, controlPlaneURL string) ([]Node, error) {
 	return out, nil
 }
 
-func ListContainers(ctx context.Context, controlPlaneURL, nodeID string) ([]Container, error) {
-	if controlPlaneURL == "" {
-		return nil, fmt.Errorf("control plane url is required")
+func ListContainers(ctx context.Context, cp client.ControlPlane, nodeID string) ([]Container, error) {
+	if err := cp.Validate(); err != nil {
+		return nil, err
 	}
 
-	containers, err := api(controlPlaneURL).ListContainers(ctx, nodeID)
+	containers, err := client.New(client.Options{BaseURL: cp.HTTPBaseURL()}).ListContainers(ctx, nodeID)
 	if err != nil {
 		return nil, err
 	}

@@ -2,25 +2,27 @@
 
 Binary: `atellar-agent` (`cmd/agent`)
 
-Node-side process that connects to the control plane. **Dumb design**: reads config only, does not make orchestration decisions.
+Node-side process. Reads `/etc/atellar/agent.json` only — no env vars, no HTTP to control plane.
 
-## How it works
+## Connection
 
-1. Load `/etc/atellar/agent.json`
-2. Resolve gRPC address (`grpc_addr` or control plane host + `:9090`)
-3. Open `Connect` bidi stream with `Bearer <node_api_key>`
-4. Send heartbeats (default 5s)
-5. Handle `reconcile.trigger` RPCs from the server
-6. Check API key expiry hourly; auto-renew 7 days before expiry
+| Field | Use |
+|-------|-----|
+| `control_plane_address` | Host/IP |
+| `http_port` | Not used by agent (atelctl / join register) |
+| `grpc_port` | Agent dials `address:grpc_port` |
 
-## Config file
+```go
+cfg.ResolveGrpcAddr()  // → "cp-host:9090"
+```
 
-Path: `/etc/atellar/agent.json`
+## Config example (after join)
 
 ```json
 {
-  "control_plane_url": "http://localhost:8080",
-  "grpc_addr": "localhost:9090",
+  "control_plane_address": "cp-host",
+  "http_port": 8080,
+  "grpc_port": 9090,
   "node_id": "uuid",
   "node_name": "node-1",
   "overlay_ip": "10.0.0.1",
@@ -34,61 +36,17 @@ Path: `/etc/atellar/agent.json`
 }
 ```
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `control_plane_url` | yes | Used by CLI/plugins to derive gRPC host; agent dials `grpc_addr` or host:9090 |
-| `node_id` | yes | Assigned after register |
-| `node_api_key` | yes | gRPC auth |
-| `api_key_expires_at` | yes | Renew threshold |
-| `overlay_ip` | no | Set after register |
-| `overlay_subnet` | no | Set after register |
-| `grpc_addr` | no | Defaults to hostname:9090 |
-| `heartbeat_interval` | no | Default `5s` |
-| `bridge_name` | no | Overlay bridge (default `atellar0`) |
-| `reconcile_interval` | no | Network reconcile period (default `30s`) |
+All three control plane fields are **required** in config.
 
-The agent does **not** use environment variables.
+## Runtime
 
-## Overlay network (Linux)
+1. Load config
+2. gRPC `Connect` to `control_plane_address:grpc_port`
+3. Heartbeat + `reconcile.trigger` handling
+4. Overlay reconcile + containerd (when enabled)
 
-On startup, `overlay.Manager` runs:
+## Node setup (atelctl)
 
-1. **Bridge** — creates and brings UP `bridge_name` (default `atellar0`)
-2. **Local IP** — assigns `overlay_ip/overlay_subnet` to the bridge
-3. **Peer routes** — `via <peer_overlay_ip> dev <bridge>` for other node subnets
-4. **Container routes** — `/32 via <node_overlay_ip>` for remote container overlay IPs
-5. **Continuous reconcile** — on every `reconcile_interval` and every `reconcile.trigger` event
-6. **Cluster sync** — `GetClusterNetworkState` gRPC call (drift correction)
-
-Uses `ip link`, `ip addr`, `ip route` (`CAP_NET_ADMIN` required).
-
-On macOS/dev: stub mode logs only, no real network changes.
-
-The agent uses **gRPC only** (no HTTP). All control-plane communication goes through `AgentService`:
-
-- `Connect` — heartbeat + peer events
-- `RenewNodeAPIKey` — API key renewal
-- `GetClusterNetworkState` — periodic overlay cluster sync
-
-HTTP REST API (`control_plane_url`) is for `atelctl`, external tools, and custom plugins — not the agent.
-
-## Peer reconcile
-
-On `reconcile.trigger`, the agent updates desired network state and reconciles:
-
-- `node.added` / `node.removed` / `node.updated`
-- `container.scheduled` / `container.started` / `container.stopped` / `container.terminated` / `container.updated`
-
-## systemd
-
-`atelctl agent install` creates an `atellar-agent.service` unit:
-
-- Config: `/etc/atellar/agent.json`
-- Binary: `/usr/local/bin/atellar-agent`
-
-## Related code
-
-- `internal/agent/agent.go` — entry point
-- `internal/agent/grpcclient/` — gRPC session, heartbeat, renew
-- `internal/agent/overlay/` — bridge, IP, route reconcile
-- `internal/agent/config/` — config load/save
+- `atelctl agent install` — dirs + systemd
+- `atelctl agent join` — writes config (address + ports + credentials)
+- `install --auto-join` — install then join in one chain
