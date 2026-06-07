@@ -5,13 +5,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hasirciogluhq/atellar/cmd/api/shared"
-	useCases "github.com/hasirciogluhq/atellar/internal/nodes/application/usecases"
+	"github.com/hasirciogluhq/atellar/internal/modules/nodes/application/usecases"
 )
 
 func registerHeartbeatRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 	c.POST("/:nodeId/heartbeat", func(c *gin.Context) {
 		nodeID := c.Param("nodeId")
-		useCase := useCases.NewNodeHeartbeatUseCase(infra)
+		useCase := usecases.NewNodeHeartbeatUseCase(infra.Repositories.Nodes)
 		err := useCase.Execute(c.Request.Context(), nodeID)
 
 		if err != nil {
@@ -24,7 +24,7 @@ func registerHeartbeatRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 
 	c.GET("/:nodeId/heartbeat", func(c *gin.Context) {
 		nodeID := c.Param("nodeId")
-		useCase := useCases.NewNodeHeartbeatUseCase(infra)
+		useCase := usecases.NewNodeHeartbeatUseCase(infra.Repositories.Nodes)
 		err := useCase.Execute(c.Request.Context(), nodeID)
 
 		if err != nil {

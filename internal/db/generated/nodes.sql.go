@@ -7,7 +7,85 @@ package db_generated
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const createJoinToken = `-- name: CreateJoinToken :one
+INSERT INTO node_join_tokens (id, token, expires_at)
+VALUES ($1, $2, $3)
+RETURNING id, token, expires_at, created_at
+`
+
+type CreateJoinTokenParams struct {
+	ID        string
+	Token     string
+	ExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) CreateJoinToken(ctx context.Context, arg CreateJoinTokenParams) (NodeJoinToken, error) {
+	row := q.db.QueryRow(ctx, createJoinToken, arg.ID, arg.Token, arg.ExpiresAt)
+	var i NodeJoinToken
+	err := row.Scan(
+		&i.ID,
+		&i.Token,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createNode = `-- name: CreateNode :one
+INSERT INTO nodes (id, name, public_ip, private_ip, status)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, name, public_ip, private_ip, status, last_heartbeat, created_at, updated_at
+`
+
+type CreateNodeParams struct {
+	ID        string
+	Name      string
+	PublicIp  pgtype.Text
+	PrivateIp pgtype.Text
+	Status    NodeStatus
+}
+
+func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, error) {
+	row := q.db.QueryRow(ctx, createNode,
+		arg.ID,
+		arg.Name,
+		arg.PublicIp,
+		arg.PrivateIp,
+		arg.Status,
+	)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PublicIp,
+		&i.PrivateIp,
+		&i.Status,
+		&i.LastHeartbeat,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getJoinTokenByToken = `-- name: GetJoinTokenByToken :one
+SELECT id, token, expires_at, created_at FROM node_join_tokens WHERE token = $1
+`
+
+func (q *Queries) GetJoinTokenByToken(ctx context.Context, token string) (NodeJoinToken, error) {
+	row := q.db.QueryRow(ctx, getJoinTokenByToken, token)
+	var i NodeJoinToken
+	err := row.Scan(
+		&i.ID,
+		&i.Token,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
 
 const getNodeById = `-- name: GetNodeById :one
 SELECT id, name, public_ip, private_ip, status, last_heartbeat, created_at, updated_at FROM nodes WHERE id = $1
@@ -49,8 +127,37 @@ func (q *Queries) GetNodeByName(ctx context.Context, name string) (Node, error) 
 	return i, err
 }
 
+const listJoinTokens = `-- name: ListJoinTokens :many
+SELECT id, token, expires_at, created_at FROM node_join_tokens ORDER BY created_at DESC
+`
+
+func (q *Queries) ListJoinTokens(ctx context.Context) ([]NodeJoinToken, error) {
+	rows, err := q.db.Query(ctx, listJoinTokens)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []NodeJoinToken
+	for rows.Next() {
+		var i NodeJoinToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.Token,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateNodeHeartbeat = `-- name: UpdateNodeHeartbeat :exec
-UPDATE nodes SET last_heartbeat = now() WHERE id = $1
+UPDATE nodes SET last_heartbeat = now(), updated_at = now() WHERE id = $1
 `
 
 func (q *Queries) UpdateNodeHeartbeat(ctx context.Context, id string) error {

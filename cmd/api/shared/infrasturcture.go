@@ -2,7 +2,7 @@ package shared
 
 import (
 	db_generated "github.com/hasirciogluhq/atellar/internal/db/generated"
-	postgres "github.com/hasirciogluhq/atellar/internal/nodes/infrasturcture/repositories"
+	postgres "github.com/hasirciogluhq/atellar/internal/modules/nodes/infrasturcture/repositories"
 )
 
 type Repositories struct {

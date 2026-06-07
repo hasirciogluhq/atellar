@@ -9,4 +9,6 @@ func RegisterNodeRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 	group := c.Group("/nodes")
 
 	registerHeartbeatRoutes(group, infra)
+	registerRegisterRoutes(group, infra)
+	registerJoinTokenRoutes(group, infra)
 }
