@@ -81,7 +81,35 @@ atelctl cluster nodes list \
   --grpc-port 9090
 ```
 
+## Release install / uninstall
+
+Each GitHub release includes `install.sh` and `uninstall.sh` (also under `scripts/release/` in the repo).
+
+```bash
+# download release and install all binaries (api + agent + atelctl)
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/download/v0.1.0/install.sh | sudo bash -s -- \
+  --version v0.1.0 \
+  --join-token <TOKEN> \
+  --name node-1 \
+  --public-ip 203.0.113.10 \
+  --private-ip 10.0.0.5 \
+  --control-plane-address cp-host \
+  --http-port 8080 \
+  --grpc-port 9090
+
+# control plane only
+sudo bash install.sh --local --database-url 'postgres://...'
+
+# remove everything (api, agent, atelctl, config, migrations, workloads)
+sudo ./uninstall.sh --yes
+```
+
+`uninstall.sh` does **not** delete the node from control plane PostgreSQL — use evict API on the CP.
+
+Maintainers: `./scripts/release/package.sh v0.1.0` builds `dist/atellar_0.1.0_linux_amd64.tar.gz`.
+
 ## Related code
 
+- `scripts/release/install.sh`, `scripts/release/uninstall.sh`, `scripts/release/package.sh`
 - `pkg/client/controlplane.go` — `ControlPlane`, `HTTPBaseURL()`, `GRPCAddr()`
 - `internal/agent/config/` — persisted agent config

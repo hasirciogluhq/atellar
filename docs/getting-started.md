@@ -28,18 +28,18 @@ curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
 
 Save the `token` value from the response — it is shown only once.
 
-## 3. Install agent (atelctl)
+## 3. Install from release
 
-On the worker machine — one shot with auto-join:
+Each GitHub release ships `install.sh` plus binaries (`atellar-api`, `atellar-agent`, `atelctl`) and DB migrations. No build from source on the target machine.
+
+### Control plane + agent on one host
 
 ```bash
-go build -o atellar-agent ./cmd/agent
-sudo cp atellar-agent /usr/local/bin/
-
-sudo go run ./cmd/atelctl agent install \
-  --auto-join \
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/download/v0.1.0/install.sh | sudo bash -s -- \
+  --version v0.1.0 \
+  --database-url 'postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable' \
   --join-token <PLAIN_TOKEN> \
-  --control-plane-address <cp-host> \
+  --control-plane-address localhost \
   --http-port 8080 \
   --grpc-port 9090 \
   --name node-1 \
@@ -47,21 +47,31 @@ sudo go run ./cmd/atelctl agent install \
   --private-ip 10.0.0.5
 ```
 
-`install` creates dirs + systemd unit (binary must already be at `/usr/local/bin/atellar-agent`). With `--auto-join` it chains into `join` and writes `/etc/atellar/agent.json`.
-
-Or separately:
+### Agent-only node (control plane already running elsewhere)
 
 ```bash
-sudo go run ./cmd/atelctl agent install
-atelctl agent join \
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/download/v0.1.0/install.sh | sudo bash -s -- \
+  --version v0.1.0 \
   --join-token <PLAIN_TOKEN> \
   --control-plane-address <cp-host> \
   --http-port 8080 \
   --grpc-port 9090 \
-  --name node-1 \
-  --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5
+  --name node-2 \
+  --public-ip 203.0.113.11 \
+  --private-ip 10.0.0.6
 ```
+
+Or extract the release tarball and run locally:
+
+```bash
+tar xzf atellar_0.1.0_linux_amd64.tar.gz
+cd atellar_0.1.0_linux_amd64
+sudo ./install.sh --local --join-token <PLAIN_TOKEN> ...
+```
+
+### atelctl only (binaries already installed)
+
+`atelctl agent install` creates dirs + systemd unit (binary must already be at `/usr/local/bin/atellar-agent`). With `--auto-join` it chains into `join` and writes `/etc/atellar/agent.json`.
 
 ## 5. Verify
 
