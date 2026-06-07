@@ -23,7 +23,38 @@ func (m *linuxLinkManager) EnsureBridge(name string) error {
 		}
 	}
 
+	// A bridge with no enslaved ports stays NO-CARRIER / operstate DOWN on Linux.
+	// Keep a dummy port attached so overlay routes are not linkdown before containers run.
+	if err := m.ensureBridgeCarrier(name); err != nil {
+		return fmt.Errorf("ensure bridge carrier on %s: %w", name, err)
+	}
+
 	return m.SetLinkUp(name)
+}
+
+func (m *linuxLinkManager) ensureBridgeCarrier(bridge string) error {
+	dummy := bridgeCarrierName(bridge)
+	if err := m.run("link", "show", dummy); err != nil {
+		if err := m.run("link", "add", dummy, "type", "dummy"); err != nil {
+			return fmt.Errorf("create dummy %s: %w", dummy, err)
+		}
+	}
+
+	_ = m.run("link", "set", dummy, "master", bridge)
+	if err := m.run("link", "set", dummy, "up"); err != nil {
+		return fmt.Errorf("bring up dummy %s: %w", dummy, err)
+	}
+
+	return nil
+}
+
+func bridgeCarrierName(bridge string) string {
+	const maxLen = 15
+	name := bridge + "-c"
+	if len(name) <= maxLen {
+		return name
+	}
+	return name[:maxLen]
 }
 
 func (m *linuxLinkManager) SetLinkUp(name string) error {

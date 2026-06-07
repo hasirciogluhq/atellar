@@ -15,11 +15,12 @@ type Node struct {
 }
 
 type Container struct {
-	ID        string
-	NodeID    string
-	Image     string
-	Status    string
-	OverlayIP string
+	ID           string
+	NodeID       string
+	Image        string
+	Status       string
+	OverlayIP    string
+	ErrorMessage string
 }
 
 func ListNodes(ctx context.Context, cp client.ControlPlane) ([]Node, error) {
@@ -58,11 +59,12 @@ func ListContainers(ctx context.Context, cp client.ControlPlane, nodeID string) 
 	out := make([]Container, 0, len(containers))
 	for _, c := range containers {
 		out = append(out, Container{
-			ID:        c.ID,
-			NodeID:    c.NodeID,
-			Image:     c.Image,
-			Status:    c.Status,
-			OverlayIP: c.OverlayIP,
+			ID:           c.ID,
+			NodeID:       c.NodeID,
+			Image:        c.Image,
+			Status:       c.Status,
+			OverlayIP:    c.OverlayIP,
+			ErrorMessage: c.ErrorMessage,
 		})
 	}
 	return out, nil

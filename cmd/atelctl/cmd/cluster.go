@@ -71,10 +71,10 @@ var clusterContainersListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNODE_ID\tIMAGE\tSTATUS\tOVERLAY_IP")
+		fmt.Fprintln(w, "ID\tNODE_ID\tIMAGE\tSTATUS\tOVERLAY_IP\tERROR")
 		for _, c := range containers {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-				c.ID, c.NodeID, c.Image, c.Status, c.OverlayIP)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				c.ID, c.NodeID, c.Image, c.Status, c.OverlayIP, c.ErrorMessage)
 		}
 		return w.Flush()
 	},

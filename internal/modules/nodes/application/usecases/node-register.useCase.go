@@ -75,8 +75,10 @@ func (u *NodeRegisterUseCase) Execute(ctx context.Context, input RegisterNodeInp
 		return nil, errors.New("failed to register node")
 	}
 
-	if err := u.nodeRepository.MarkJoinTokenUsed(ctx, joinToken.ID, createdNode.ID); err != nil {
-		return nil, err
+	if joinToken.SingleUse {
+		if err := u.nodeRepository.MarkJoinTokenUsed(ctx, joinToken.ID, createdNode.ID); err != nil {
+			return nil, err
+		}
 	}
 
 	provisionedNode, err := u.overlayProvisioner.ProvisionNodeOverlay(ctx, createdNode.ID)

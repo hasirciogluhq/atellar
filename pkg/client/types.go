@@ -35,11 +35,12 @@ type NodeAPIKeyResult struct {
 }
 
 type Container struct {
-	ID        string `json:"id"`
-	NodeID    string `json:"node_id"`
-	Image     string `json:"image"`
-	Status    string `json:"status"`
-	OverlayIP string `json:"overlay_ip,omitempty"`
+	ID           string `json:"id"`
+	NodeID       string `json:"node_id"`
+	Image        string `json:"image"`
+	Status       string `json:"status"`
+	OverlayIP    string `json:"overlay_ip,omitempty"`
+	ErrorMessage string `json:"error_message,omitempty"`
 }
 
 type CreateContainerRequest struct {

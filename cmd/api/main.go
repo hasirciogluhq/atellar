@@ -10,7 +10,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/lib/pq"
 
 	http_routes "github.com/hasirciogluhq/atellar/cmd/api/routes"
@@ -26,7 +26,7 @@ func NewDatabase(config *config.APIConfig) *shared.Database {
 }
 
 func setupDatabaseConnections(config *config.APIConfig) *shared.Database {
-	pgxConn, err := pgx.Connect(context.Background(), config.DatabaseURL)
+	pool, err := pgxpool.New(context.Background(), config.DatabaseURL)
 	if err != nil {
 		panic(err)
 	}
@@ -36,7 +36,7 @@ func setupDatabaseConnections(config *config.APIConfig) *shared.Database {
 		panic(err)
 	}
 
-	return &shared.Database{PgxConn: pgxConn, SqlDb: sqlDb}
+	return &shared.Database{Pool: pool, SqlDb: sqlDb}
 }
 
 func setupMigrations(database *shared.Database, config *config.APIConfig) *migrator.Migrator {
@@ -69,7 +69,7 @@ func main() {
 	database := NewDatabase(config)
 	setupMigrations(database, config)
 
-	_ = db_generated.New(database.PgxConn)
+	_ = db_generated.New(database.Pool)
 
 	infra, err := shared.LoadInfrastructure(database, config)
 	if err != nil {

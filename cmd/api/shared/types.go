@@ -3,10 +3,10 @@ package shared
 import (
 	"database/sql"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Database struct {
-	PgxConn *pgx.Conn
-	SqlDb   *sql.DB
+	Pool  *pgxpool.Pool
+	SqlDb *sql.DB
 }

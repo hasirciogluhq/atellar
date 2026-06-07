@@ -28,7 +28,7 @@ type Infrastructure struct {
 }
 
 func LoadInfrastructure(database *Database, apiConfig *config.APIConfig) (*Infrastructure, error) {
-	queries := db_generated.New(database.PgxConn)
+	queries := db_generated.New(database.Pool)
 	repositories := loadRepositories(queries)
 
 	agentRegistry := agentregistry.NewRegistry()
