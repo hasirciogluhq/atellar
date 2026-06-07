@@ -9,8 +9,8 @@ Atellar consists of two layers:
 
 ```
 ┌─────────────┐     HTTP      ┌──────────────────┐
-│  atellar    │──────────────►│   API Server     │
-│  CLI        │   register    │  :8080 / :9090   │
+│  atelctl    │──────────────►│   API Server     │
+│  agent init │   register    │  :8080 / :9090   │
 └─────────────┘               └────────┬─────────┘
                                        │
 ┌─────────────┐     gRPC bidi          │ PostgreSQL

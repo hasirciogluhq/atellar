@@ -28,12 +28,12 @@ curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
 
 Save the `token` value from the response — it is shown only once.
 
-## 3. Join node to cluster (CLI)
+## 3. Initialize node agent (atelctl)
 
 On the worker machine:
 
 ```bash
-sudo go run ./cmd/cli join \
+sudo go run ./cmd/atelctl agent init \
   --token <PLAIN_TOKEN> \
   --control-plane-url http://<cp-host>:8080 \
   --name node-1 \
@@ -52,7 +52,7 @@ This command:
 ```bash
 go build -o atellar-agent ./cmd/agent
 
-sudo go run ./cmd/cli install \
+sudo go run ./cmd/atelctl agent install \
   --agent-bin ./atellar-agent
 ```
 
@@ -62,7 +62,8 @@ Creates a systemd unit, enables and restarts the service.
 
 ```bash
 # List nodes
-curl http://localhost:8080/api/v1/nodes
+atelctl cluster nodes list
+# or: curl http://localhost:8080/api/v1/nodes
 
 # Agent logs
 journalctl -u atellar-agent -f

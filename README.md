@@ -14,11 +14,11 @@ curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
   -H "Content-Type: application/json" \
   -d '{"single_use": true}'
 
-# 3. Join node to cluster
-sudo go run ./cmd/cli join --token <PLAIN_TOKEN> --name node-1
+# 3. Initialize node agent
+sudo go run ./cmd/atelctl agent init --token <PLAIN_TOKEN> --name node-1
 
 # 4. Install and start agent
-sudo go run ./cmd/cli install --agent-bin ./atellar-agent
+sudo go run ./cmd/atelctl agent install --agent-bin ./atellar-agent
 ```
 
 ## Components
@@ -26,13 +26,13 @@ sudo go run ./cmd/cli install --agent-bin ./atellar-agent
 | Component | Binary | Role |
 |-----------|--------|------|
 | **API Server** | `cmd/api` | HTTP `:8080` + gRPC `:9090`, node/container management, overlay IPAM |
-| **CLI** | `cmd/cli` | `join`, `install`, `renew-api-key` |
+| **atelctl** | `cmd/atelctl` | `agent init/install`, `cluster nodes/containers list` |
 | **Agent** | `cmd/agent` | gRPC-only: config, stream, heartbeat, overlay reconcile |
 
 ## Architecture (overview)
 
 ```
-CLI ──register──► API Server ◄──gRPC stream── Agent
+atelctl ──register──► API Server ◄──gRPC stream── Agent
                       │
                    PostgreSQL
                       │
@@ -49,9 +49,11 @@ For detailed usage, config, and architecture:
 
 - [Overview & architecture](docs/architecture.md)
 - [Getting started](docs/getting-started.md)
-- [CLI usage](docs/cli.md)
+- [atelctl](docs/cli.md)
 - [Agent](docs/agent.md)
 - [API server](docs/api-server.md)
 - [Config & environment](docs/config.md)
 - [Peer events (node + container)](docs/peer-events.md)
-- [Code layout & dependencies](docs/code-layout.md) [github.com/hasirciogluhq/atellar](https://github.com/hasirciogluhq/atellar)
+- [Code layout & dependencies](docs/code-layout.md)
+
+Source: [github.com/hasirciogluhq/atellar](https://github.com/hasirciogluhq/atellar)

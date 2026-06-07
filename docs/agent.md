@@ -70,7 +70,7 @@ The agent uses **gRPC only** (no HTTP). All control-plane communication goes thr
 - `RenewNodeAPIKey` — API key renewal
 - `GetClusterNetworkState` — periodic overlay cluster sync
 
-HTTP REST API (`control_plane_url`) is for external tools, CLI (`join`), and custom plugins — not the agent.
+HTTP REST API (`control_plane_url`) is for `atelctl`, external tools, and custom plugins — not the agent.
 
 ## Peer reconcile
 
@@ -81,7 +81,7 @@ On `reconcile.trigger`, the agent updates desired network state and reconciles:
 
 ## systemd
 
-The `install` command creates an `atellar-agent.service` unit:
+`atelctl agent install` creates an `atellar-agent.service` unit:
 
 - Config: `/etc/atellar/agent.json`
 - Binary: `/usr/local/bin/atellar-agent`

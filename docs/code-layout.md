@@ -6,7 +6,7 @@ Dependency direction is **top → down**. Lower layers must not import domain mo
 cmd/                          # binaries (thin entrypoints)
 ├── api/                      # control plane HTTP + wiring
 ├── agent/                    # node agent binary
-└── cli/                      # operator CLI
+└── atelctl/                  # operator CLI (agent + cluster)
 
 internal/
 ├── config/                   # API server env config
@@ -45,10 +45,9 @@ internal/
 │   ├── tokenhash/
 │   └── nodetoken/
 
-└── cli/                      # CLI command implementations
-    ├── join/
-    ├── install/
-    └── renew/
+└── atelctl/                  # atelctl command implementations
+    ├── agent/                # init, install, renew-key
+    └── cluster/              # nodes/containers list
 ```
 
 ## Dependency rules
@@ -75,7 +74,7 @@ internal/
 |-----------|-----------|
 | `agent/grpcclient` | gRPC only |
 | `agent/overlay` | local `ip` commands (linux) |
-| `client/controlplane` | HTTP (CLI join/renew, external plugins) |
+| `client/controlplane` | HTTP (atelctl, external plugins) |
 | `cmd/api` routes | HTTP REST |
 
 ## Future (when adding vmnet / container netns)

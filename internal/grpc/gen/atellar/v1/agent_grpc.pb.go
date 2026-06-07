@@ -22,6 +22,8 @@ const (
 	AgentService_Connect_FullMethodName                = "/atellar.v1.AgentService/Connect"
 	AgentService_RenewNodeAPIKey_FullMethodName        = "/atellar.v1.AgentService/RenewNodeAPIKey"
 	AgentService_GetClusterNetworkState_FullMethodName = "/atellar.v1.AgentService/GetClusterNetworkState"
+	AgentService_GetNodeWorkloads_FullMethodName       = "/atellar.v1.AgentService/GetNodeWorkloads"
+	AgentService_ReportContainerRuntime_FullMethodName = "/atellar.v1.AgentService/ReportContainerRuntime"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -31,6 +33,8 @@ type AgentServiceClient interface {
 	Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AgentEnvelope, ServerEnvelope], error)
 	RenewNodeAPIKey(ctx context.Context, in *RenewNodeAPIKeyRequest, opts ...grpc.CallOption) (*RenewNodeAPIKeyResponse, error)
 	GetClusterNetworkState(ctx context.Context, in *GetClusterNetworkStateRequest, opts ...grpc.CallOption) (*GetClusterNetworkStateResponse, error)
+	GetNodeWorkloads(ctx context.Context, in *GetNodeWorkloadsRequest, opts ...grpc.CallOption) (*GetNodeWorkloadsResponse, error)
+	ReportContainerRuntime(ctx context.Context, in *ReportContainerRuntimeRequest, opts ...grpc.CallOption) (*ReportContainerRuntimeResponse, error)
 }
 
 type agentServiceClient struct {
@@ -74,6 +78,26 @@ func (c *agentServiceClient) GetClusterNetworkState(ctx context.Context, in *Get
 	return out, nil
 }
 
+func (c *agentServiceClient) GetNodeWorkloads(ctx context.Context, in *GetNodeWorkloadsRequest, opts ...grpc.CallOption) (*GetNodeWorkloadsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetNodeWorkloadsResponse)
+	err := c.cc.Invoke(ctx, AgentService_GetNodeWorkloads_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ReportContainerRuntime(ctx context.Context, in *ReportContainerRuntimeRequest, opts ...grpc.CallOption) (*ReportContainerRuntimeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportContainerRuntimeResponse)
+	err := c.cc.Invoke(ctx, AgentService_ReportContainerRuntime_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -81,6 +105,8 @@ type AgentServiceServer interface {
 	Connect(grpc.BidiStreamingServer[AgentEnvelope, ServerEnvelope]) error
 	RenewNodeAPIKey(context.Context, *RenewNodeAPIKeyRequest) (*RenewNodeAPIKeyResponse, error)
 	GetClusterNetworkState(context.Context, *GetClusterNetworkStateRequest) (*GetClusterNetworkStateResponse, error)
+	GetNodeWorkloads(context.Context, *GetNodeWorkloadsRequest) (*GetNodeWorkloadsResponse, error)
+	ReportContainerRuntime(context.Context, *ReportContainerRuntimeRequest) (*ReportContainerRuntimeResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -99,6 +125,12 @@ func (UnimplementedAgentServiceServer) RenewNodeAPIKey(context.Context, *RenewNo
 }
 func (UnimplementedAgentServiceServer) GetClusterNetworkState(context.Context, *GetClusterNetworkStateRequest) (*GetClusterNetworkStateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetClusterNetworkState not implemented")
+}
+func (UnimplementedAgentServiceServer) GetNodeWorkloads(context.Context, *GetNodeWorkloadsRequest) (*GetNodeWorkloadsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNodeWorkloads not implemented")
+}
+func (UnimplementedAgentServiceServer) ReportContainerRuntime(context.Context, *ReportContainerRuntimeRequest) (*ReportContainerRuntimeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportContainerRuntime not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -164,6 +196,42 @@ func _AgentService_GetClusterNetworkState_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_GetNodeWorkloads_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeWorkloadsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetNodeWorkloads(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_GetNodeWorkloads_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetNodeWorkloads(ctx, req.(*GetNodeWorkloadsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_ReportContainerRuntime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportContainerRuntimeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ReportContainerRuntime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ReportContainerRuntime_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ReportContainerRuntime(ctx, req.(*ReportContainerRuntimeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -178,6 +246,14 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetClusterNetworkState",
 			Handler:    _AgentService_GetClusterNetworkState_Handler,
+		},
+		{
+			MethodName: "GetNodeWorkloads",
+			Handler:    _AgentService_GetNodeWorkloads_Handler,
+		},
+		{
+			MethodName: "ReportContainerRuntime",
+			Handler:    _AgentService_ReportContainerRuntime_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/hasirciogluhq/atellar/cmd/cli/cmd"
+	"github.com/hasirciogluhq/atellar/cmd/atelctl/cmd"
 )
 
 func main() {

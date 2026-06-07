@@ -1,17 +1,28 @@
-# CLI Usage
+# atelctl
 
-Binary: `atellar` (`cmd/cli`)
+Binary: `atelctl` (`cmd/atelctl`)
 
-Handles operator tasks: node registration, agent installation, and API key renewal. **Join is not done by the agent** — it lives in the CLI.
+Operator tool for **cluster** (control plane) and **agent** (node) operations.
 
-## Commands
+```
+atelctl
+├── agent                 # local node agent
+│   ├── init              # register node + write config
+│   ├── install           # systemd install
+│   └── renew-key         # renew node API key
+└── cluster               # control plane
+    ├── nodes list
+    └── containers list
+```
 
-### `join`
+## Agent commands
 
-Registers the machine with the control plane and writes agent config.
+### `agent init`
+
+Registers the machine with the control plane and writes `/etc/atellar/agent.json`.
 
 ```bash
-atellar join \
+atelctl agent init \
   --token <JOIN_TOKEN> \
   --control-plane-url http://localhost:8080 \
   --name node-1 \
@@ -22,58 +33,64 @@ atellar join \
   --config /etc/atellar/agent.json
 ```
 
-| Flag | Required | Default | Description |
-|------|----------|---------|-------------|
-| `--token` | yes | — | Join token |
-| `--control-plane-url` | no | `http://localhost:8080` | API base URL |
-| `--name` | no | — | Node name (unique) |
-| `--public-ip` | no | — | Public IP |
-| `--private-ip` | no | — | Private IP |
-| `--containerd-sock` | no | `/run/containerd/containerd.sock` | containerd socket |
-| `--heartbeat-interval` | no | `5s` | Written to agent config |
-| `--config` | no | `/etc/atellar/agent.json` | Output config path |
+| Flag | Required | Default |
+|------|----------|---------|
+| `--token` | yes | — |
+| `--control-plane-url` | no | `http://localhost:8080` |
+| `--name` | no | — |
+| `--public-ip` | no | — |
+| `--private-ip` | no | — |
+| `--containerd-sock` | no | `/run/containerd/containerd.sock` |
+| `--heartbeat-interval` | no | `5s` |
+| `--config` | no | `/etc/atellar/agent.json` |
 
-After registration, `overlay_ip` and `overlay_subnet` are also written to config.
+### `agent install`
 
-### `install`
-
-Installs the agent binary and creates a systemd service.
+Installs the agent binary and creates a systemd unit.
 
 ```bash
-sudo atellar install \
+sudo atelctl agent install \
   --agent-bin ./atellar-agent \
   --target /usr/local/bin/atellar-agent \
   --config /etc/atellar/agent.json
 ```
 
-| Flag | Required | Default |
-|------|----------|---------|
-| `--agent-bin` | yes | — |
-| `--target` | no | `/usr/local/bin/atellar-agent` |
-| `--config` | no | `/etc/atellar/agent.json` |
+### `agent renew-key`
 
-### `renew-api-key`
-
-Renews the node API key (reads key from HTTP or config).
+Renews the node API key (reads from config by default).
 
 ```bash
-atellar renew-api-key \
-  --config /etc/atellar/agent.json \
-  --update-config true
+atelctl agent renew-key --config /etc/atellar/agent.json
+```
+
+## Cluster commands
+
+All cluster commands accept `--control-plane-url` (default `http://localhost:8080`).
+
+### `cluster nodes list`
+
+```bash
+atelctl cluster nodes list
+```
+
+### `cluster containers list`
+
+```bash
+atelctl cluster containers list
+atelctl cluster containers list --node-id <NODE_ID>
 ```
 
 ## Typical flow
 
 ```
-join → install → (agent runs automatically)
+atelctl agent init → atelctl agent install → agent runs via systemd
 ```
 
-The agent renews the API key automatically before expiry; use `renew-api-key` manually if needed.
+The agent renews its API key automatically; use `agent renew-key` manually if needed.
 
 ## Related code
 
-- `internal/cli/join/`
-- `internal/cli/install/`
-- `internal/cli/renew/`
-- Agent: gRPC only (`internal/agent/grpcclient/`)
-- CLI/plugins: HTTP (`internal/client/controlplane/`)
+- `cmd/atelctl/` — cobra commands
+- `internal/atelctl/agent/` — init, install, renew-key
+- `internal/atelctl/cluster/` — nodes/containers list
+- `internal/client/controlplane/` — HTTP client to control plane
