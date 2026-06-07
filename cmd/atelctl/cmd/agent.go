@@ -46,10 +46,6 @@ var agentJoinCmd = &cobra.Command{
 	Use:   "join",
 	Short: "Join this node to the control plane",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if joinToken == "" {
-			return fmt.Errorf("--join-token is required")
-		}
-
 		cfg, err := agent.Join(context.Background(), joinOptions())
 		if err != nil {
 			return err
@@ -63,6 +59,12 @@ var agentJoinCmd = &cobra.Command{
 var agentInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Create dirs and install atellar-agent systemd service",
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		if !installAutoJoin {
+			return nil
+		}
+		return agent.ValidateJoinOptions(joinOptions())
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		result, err := agent.Install(context.Background(), installAutoJoin, joinOptions())
 		if err != nil {
@@ -73,7 +75,7 @@ var agentInstallCmd = &cobra.Command{
 		if result.NodeID != "" {
 			fmt.Printf("  node_id: %s\n  config: %s\n", result.NodeID, config.SystemConfigPath)
 		} else {
-			fmt.Printf("\nnext: atelctl agent join --join-token <TOKEN> --name <NODE_NAME>\n")
+			fmt.Printf("\nnext: atelctl agent join --join-token <TOKEN> --name <NODE_NAME> --public-ip <IP> --private-ip <IP>\n")
 		}
 		return nil
 	},
@@ -110,11 +112,12 @@ func init() {
 	agentInstallCmd.Flags().BoolVar(&installAutoJoin, "auto-join", false, "run join after install")
 
 	agentRenewKeyCmd.Flags().StringVar(&renewControlPlaneURL, "control-plane-url", "", "control plane URL")
-	agentRenewKeyCmd.Flags().StringVar(&renewAPIKey, "api-key", "", "current node API key")
+	agentRenewKeyCmd.Flags().StringVar(&renewAPIKey, "api-key", "", "current node api key")
 	agentRenewKeyCmd.Flags().BoolVar(&renewUpdateConfig, "update-config", true, "write renewed key to config")
 
-	_ = agentJoinCmd.MarkPersistentFlagRequired("public-ip")
-	_ = agentJoinCmd.MarkPersistentFlagRequired("private-ip")
+	for _, flag := range []string{"join-token", "name", "public-ip", "private-ip"} {
+		_ = agentJoinCmd.MarkPersistentFlagRequired(flag)
+	}
 
 	agentCmd.AddCommand(agentJoinCmd, agentInstallCmd, agentRenewKeyCmd)
 	rootCmd.AddCommand(agentCmd)

@@ -27,15 +27,25 @@ type JoinOptions struct {
 	HeartbeatInterval string
 }
 
-func Join(ctx context.Context, opts JoinOptions) (*config.Config, error) {
+func ValidateJoinOptions(opts JoinOptions) error {
 	if opts.JoinToken == "" {
-		return nil, fmt.Errorf("join token is required")
+		return fmt.Errorf("--join-token is required")
+	}
+	if opts.NodeName == "" {
+		return fmt.Errorf("--name is required")
 	}
 	if opts.PublicIP == "" {
-		return nil, fmt.Errorf("public ip is required")
+		return fmt.Errorf("--public-ip is required")
 	}
 	if opts.PrivateIP == "" {
-		return nil, fmt.Errorf("private ip is required")
+		return fmt.Errorf("--private-ip is required")
+	}
+	return nil
+}
+
+func Join(ctx context.Context, opts JoinOptions) (*config.Config, error) {
+	if err := ValidateJoinOptions(opts); err != nil {
+		return nil, err
 	}
 
 	controlPlaneURL := opts.ControlPlaneURL
@@ -99,8 +109,10 @@ type InstallResult struct {
 }
 
 func Install(ctx context.Context, autoJoin bool, join JoinOptions) (*InstallResult, error) {
-	if autoJoin && join.JoinToken == "" {
-		return nil, fmt.Errorf("--join-token is required with --auto-join")
+	if autoJoin {
+		if err := ValidateJoinOptions(join); err != nil {
+			return nil, fmt.Errorf("auto-join: %w", err)
+		}
 	}
 
 	for _, dir := range []string{config.SystemConfigDir, LogDir} {

@@ -23,11 +23,20 @@ Fixed paths (no flags):
 sudo cp atellar-agent /usr/local/bin/
 
 # 2. install service (+ optional join)
-sudo atelctl agent install --auto-join --join-token <TOKEN> --name node-1
+sudo atelctl agent install \
+  --auto-join \
+  --join-token <TOKEN> \
+  --name node-1 \
+  --public-ip 203.0.113.10 \
+  --private-ip 10.0.0.5
 
 # or separately:
 sudo atelctl agent install
-atelctl agent join --join-token <TOKEN> --name node-1
+atelctl agent join \
+  --join-token <TOKEN> \
+  --name node-1 \
+  --public-ip 203.0.113.10 \
+  --private-ip 10.0.0.5
 ```
 
 ## `agent install`
@@ -39,15 +48,15 @@ Requires `atellar-agent` already at `/usr/local/bin/atellar-agent`.
 | Flag | Description |
 |------|-------------|
 | `--auto-join` | join after install |
-| `--join-token` | required with `--auto-join` |
-| `--name` | node name |
-| `--public-ip` | required for join / auto-join |
-| `--private-ip` | required for join / auto-join |
 | `--control-plane-url` | default `http://localhost:8080` |
+
+With `--auto-join`, these are **required**: `--join-token`, `--name`, `--public-ip`, `--private-ip`.
 
 ## `agent join`
 
 Writes full config to `/etc/atellar/agent.json` and restarts the agent service.
+
+**Required:** `--join-token`, `--name`, `--public-ip`, `--private-ip`
 
 ## Cluster
 
