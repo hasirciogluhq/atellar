@@ -71,11 +71,18 @@ func main() {
 
 	_ = db_generated.New(database.PgxConn)
 
-	infra := shared.LoadInfrastructure(database)
+	infra, err := shared.LoadInfrastructure(database, config)
+	if err != nil {
+		panic(err)
+	}
 
 	go func() {
 		log.Printf("grpc server listening on :%s", config.GRPCPort)
-		if err := grpcserver.ListenAndServe(config.GRPCPort, infra); err != nil {
+		if err := grpcserver.ListenAndServe(config.GRPCPort, grpcserver.Deps{
+			NodeAuth:      infra.NodeAuth,
+			Nodes:         infra.Repositories.Nodes,
+			AgentRegistry: infra.AgentRegistry,
+		}); err != nil {
 			panic(err)
 		}
 	}()
@@ -87,7 +94,7 @@ func main() {
 	http_routes.RegisterRoutes(router.Group("/api"), infra)
 
 	log.Printf("http server listening on :%s", config.Port)
-	err := http.ListenAndServe(":"+config.Port, router)
+	err = http.ListenAndServe(":"+config.Port, router)
 	if err != nil {
 		panic(err)
 	}

@@ -33,7 +33,11 @@ func registerRegisterRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 			agentVersion = &req.AgentVersion
 		}
 
-		useCase := usecases.NewNodeRegisterUseCase(infra.Repositories.Nodes)
+		useCase := usecases.NewNodeRegisterUseCase(
+			infra.Repositories.Nodes,
+			infra.OverlayProvisioner,
+			infra.NodePeerNotifier,
+		)
 		node, err := useCase.Execute(c.Request.Context(), usecases.RegisterNodeInput{
 			Token:          token,
 			Name:           req.Name,
@@ -44,7 +48,12 @@ func registerRegisterRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 		})
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			status := http.StatusInternalServerError
+			switch err.Error() {
+			case "join token is required", "invalid join token", "join token expired", "join token already used":
+				status = http.StatusBadRequest
+			}
+			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
 

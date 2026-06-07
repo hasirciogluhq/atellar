@@ -10,14 +10,14 @@ CREATE TYPE node_status AS ENUM (
 );
 
 CREATE TYPE container_status AS ENUM (
-    'pending',      -- DB'ye yazıldı, node henüz görmedi
-    'scheduled',    -- node'a atandı, henüz başlamadı
-    'pulling',      -- image pull ediliyor
-    'creating',     -- containerd container create edildi, task başlamadı
-    'running',      -- task başladı, pid var
+    'pending',      -- written to DB, node has not seen it yet
+    'scheduled',    -- assigned to node, not started yet
+    'pulling',      -- pulling image
+    'creating',     -- containerd container created, task not started
+    'running',      -- task started, PID available
     'stopped',      -- graceful stop
     'crashed',      -- exit_code != 0
-    'terminated'    -- silindi, temizlendi
+    'terminated'    -- deleted and cleaned up
 );
 
 -- NODES
@@ -30,7 +30,7 @@ CREATE TABLE nodes (
     overlay_subnet CIDR DEFAULT NULL,
     status node_status NOT NULL DEFAULT 'pending',
     last_heartbeat TIMESTAMPTZ DEFAULT NULL,
-    -- node agent versiyonu, debug için
+    -- node agent version, for debugging
     agent_version TEXT DEFAULT NULL,
     -- containerd socket path (default /run/containerd/containerd.sock)
     containerd_sock TEXT NOT NULL DEFAULT '/run/containerd/containerd.sock',
@@ -51,11 +51,11 @@ CREATE TABLE node_join_tokens (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- OVERLAY IP POOL (node subnet'inden pre-allocate)
+-- OVERLAY IP POOL (pre-allocated from node subnet)
 CREATE TABLE overlay_ip_pool (
     ip INET PRIMARY KEY NOT NULL,
     node_id TEXT NOT NULL REFERENCES nodes (id) ON DELETE CASCADE,
-    container_id TEXT DEFAULT NULL, -- NULL = boş
+    container_id TEXT DEFAULT NULL, -- NULL = free
     allocated_at TIMESTAMPTZ DEFAULT NULL
 );
 
@@ -66,7 +66,7 @@ CREATE TABLE containers (
 -- containerd specifics
 -- namespace: containerd multi-tenant namespace (default "atellar")
 containerd_ns TEXT NOT NULL DEFAULT 'atellar',
--- containerd container ID (bizim id ile aynı olabilir ama explicit tutalım)
+-- containerd container ID (may match our id but kept explicit)
 containerd_id TEXT DEFAULT NULL,
 -- snapshot key (overlayfs snapshot, containerd snapshotters)
 snapshot_key TEXT DEFAULT NULL,
@@ -75,7 +75,7 @@ task_pid INTEGER DEFAULT NULL,
 
 -- Image & runtime
 image TEXT NOT NULL,
--- image digest (pull sonrası doldurulur, sha256:...)
+-- image digest (filled after pull, sha256:...)
 image_digest TEXT DEFAULT NULL,
 command TEXT [] DEFAULT NULL,
 entrypoint TEXT [] DEFAULT NULL,
@@ -95,9 +95,9 @@ memory_limit_mib INTEGER DEFAULT NULL, -- MiB
 -- Lifecycle
 status container_status NOT NULL DEFAULT 'pending',
 exit_code INTEGER DEFAULT NULL,
--- crash durumunda containerd'dan gelen hata mesajı
+-- error message from containerd on crash
 error_message TEXT DEFAULT NULL,
--- kaç kez restart edildi
+-- number of restarts
 restart_count INTEGER NOT NULL DEFAULT 0,
 restart_policy TEXT NOT NULL DEFAULT 'no',
 -- no | always | on-failure
@@ -110,7 +110,7 @@ created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     stopped_at      TIMESTAMPTZ DEFAULT NULL
 );
 
--- CONTAINER EVENTS (audit + debug, opsiyonel ama çok işe yarar)
+-- CONTAINER EVENTS (audit + debug, optional but useful)
 CREATE TYPE container_event_type AS ENUM (
     'scheduled',
     'pull_started',

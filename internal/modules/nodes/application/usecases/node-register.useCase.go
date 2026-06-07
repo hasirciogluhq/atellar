@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"errors"
+	"log"
 	"net"
 	"time"
 
@@ -20,11 +21,21 @@ type RegisterNodeInput struct {
 }
 
 type NodeRegisterUseCase struct {
-	nodeRepository ports.NodeRepositoryInterface
+	nodeRepository     ports.NodeRepositoryInterface
+	overlayProvisioner ports.OverlayProvisioner
+	peerNotifier       ports.PeerNotifier
 }
 
-func NewNodeRegisterUseCase(nodeRepository ports.NodeRepositoryInterface) *NodeRegisterUseCase {
-	return &NodeRegisterUseCase{nodeRepository: nodeRepository}
+func NewNodeRegisterUseCase(
+	nodeRepository ports.NodeRepositoryInterface,
+	overlayProvisioner ports.OverlayProvisioner,
+	peerNotifier ports.PeerNotifier,
+) *NodeRegisterUseCase {
+	return &NodeRegisterUseCase{
+		nodeRepository:     nodeRepository,
+		overlayProvisioner: overlayProvisioner,
+		peerNotifier:       peerNotifier,
+	}
 }
 
 func (u *NodeRegisterUseCase) Execute(ctx context.Context, input RegisterNodeInput) (*node.RegisterNodeResult, error) {
@@ -68,13 +79,24 @@ func (u *NodeRegisterUseCase) Execute(ctx context.Context, input RegisterNodeInp
 		return nil, err
 	}
 
+	provisionedNode, err := u.overlayProvisioner.ProvisionNodeOverlay(ctx, createdNode.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	apiKey, err := u.nodeRepository.IssueNodeAPIKey(ctx, createdNode.ID)
 	if err != nil {
 		return nil, err
 	}
 
+	if u.peerNotifier != nil {
+		if err := u.peerNotifier.NotifyNodeAdded(ctx, *provisionedNode); err != nil {
+			log.Printf("peer notification failed for node %s: %v", provisionedNode.ID, err)
+		}
+	}
+
 	return &node.RegisterNodeResult{
-		Node:            *createdNode,
+		Node:            *provisionedNode,
 		NodeAPIKey:      apiKey.NodeAPIKey,
 		APIKeyExpiresAt: apiKey.APIKeyExpiresAt,
 	}, nil

@@ -59,6 +59,15 @@ func (q *Queries) CreateOverlayIPPoolEntry(ctx context.Context, arg CreateOverla
 	return i, err
 }
 
+const deleteOverlayIPPoolByNodeId = `-- name: DeleteOverlayIPPoolByNodeId :exec
+DELETE FROM overlay_ip_pool WHERE node_id = $1
+`
+
+func (q *Queries) DeleteOverlayIPPoolByNodeId(ctx context.Context, nodeID string) error {
+	_, err := q.db.Exec(ctx, deleteOverlayIPPoolByNodeId, nodeID)
+	return err
+}
+
 const listFreeOverlayIPsByNodeId = `-- name: ListFreeOverlayIPsByNodeId :many
 SELECT ip, node_id, container_id, allocated_at FROM overlay_ip_pool
 WHERE node_id = $1 AND container_id IS NULL

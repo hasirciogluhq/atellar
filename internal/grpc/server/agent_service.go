@@ -6,7 +6,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/hasirciogluhq/atellar/cmd/api/shared"
 	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/application/usecases"
 	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
@@ -17,11 +16,11 @@ import (
 
 type AgentService struct {
 	atellarv1.UnimplementedAgentServiceServer
-	infra *shared.Infrastructure
+	deps Deps
 }
 
-func NewAgentService(infra *shared.Infrastructure) *AgentService {
-	return &AgentService{infra: infra}
+func NewAgentService(deps Deps) *AgentService {
+	return &AgentService{deps: deps}
 }
 
 func (s *AgentService) Register(grpcServer *grpc.Server) {
@@ -29,7 +28,7 @@ func (s *AgentService) Register(grpcServer *grpc.Server) {
 }
 
 func (s *AgentService) Connect(stream grpc.BidiStreamingServer[atellarv1.AgentEnvelope, atellarv1.ServerEnvelope]) error {
-	ctx, principal, err := authn.AuthenticateGRPC(stream.Context(), s.infra.NodeAuth)
+	ctx, principal, err := authn.AuthenticateGRPC(stream.Context(), s.deps.NodeAuth)
 	if err != nil {
 		return status.Errorf(codes.Unauthenticated, "%v", err)
 	}
@@ -39,8 +38,15 @@ func (s *AgentService) Connect(stream grpc.BidiStreamingServer[atellarv1.AgentEn
 		return status.Errorf(codes.Unauthenticated, "%v", err)
 	}
 
-	log.Printf("agent connected node_id=%s name=%s", node.ID, node.Name)
 	_ = principal
+
+	log.Printf("agent connected node_id=%s name=%s", node.ID, node.Name)
+
+	send := func(envelope *atellarv1.ServerEnvelope) error {
+		return stream.Send(envelope)
+	}
+	s.deps.AgentRegistry.Register(node.ID, send)
+	defer s.deps.AgentRegistry.Unregister(node.ID)
 
 	for {
 		msg, err := stream.Recv()
@@ -53,7 +59,7 @@ func (s *AgentService) Connect(stream grpc.BidiStreamingServer[atellarv1.AgentEn
 
 		switch payload := msg.Payload.(type) {
 		case *atellarv1.AgentEnvelope_Heartbeat:
-			if err := s.infra.Repositories.Nodes.UpdateNodeHeartbeat(stream.Context(), node.ID); err != nil {
+			if err := s.deps.Nodes.UpdateNodeHeartbeat(stream.Context(), node.ID); err != nil {
 				return status.Errorf(codes.Internal, "heartbeat failed: %v", err)
 			}
 
@@ -93,11 +99,11 @@ func (s *AgentService) RenewNodeAPIKey(ctx context.Context, _ *atellarv1.RenewNo
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
 
-	if _, err := s.infra.NodeAuth.Authenticate(ctx, credential); err != nil {
+	if _, err := s.deps.NodeAuth.Authenticate(ctx, credential); err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
 
-	useCase := usecases.NewRenewNodeAPIKeyUseCase(s.infra.Repositories.Nodes)
+	useCase := usecases.NewRenewNodeAPIKeyUseCase(s.deps.Nodes)
 	result, err := useCase.Execute(ctx, credential.Value)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)

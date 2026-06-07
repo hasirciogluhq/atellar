@@ -1,11 +1,14 @@
 package container
 
 import (
+	"context"
+	"log"
 	"net"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hasirciogluhq/atellar/cmd/api/shared"
+	"github.com/hasirciogluhq/atellar/internal/grpc/agentregistry"
 	"github.com/hasirciogluhq/atellar/internal/modules/containers/application/usecases"
 	container "github.com/hasirciogluhq/atellar/internal/modules/containers/domain/container"
 	containerevent "github.com/hasirciogluhq/atellar/internal/modules/containers/domain/container-event"
@@ -49,6 +52,31 @@ type createContainerEventRequest struct {
 	Metadata map[string]any `json:"metadata"`
 }
 
+func notifyContainerPeerEvent(ctx context.Context, infra *shared.Infrastructure, event string, target container.Entity) {
+	if infra.ContainerPeerNotifier == nil {
+		return
+	}
+
+	if err := infra.ContainerPeerNotifier.NotifyContainerEvent(ctx, event, target); err != nil {
+		log.Printf("container peer notification failed event=%s container_id=%s: %v", event, target.ID, err)
+	}
+}
+
+func containerStatusPeerEvent(status container.Status) string {
+	switch status {
+	case container.StatusScheduled, container.StatusPending:
+		return agentregistry.PeerEventContainerScheduled
+	case container.StatusRunning:
+		return agentregistry.PeerEventContainerStarted
+	case container.StatusStopped:
+		return agentregistry.PeerEventContainerStopped
+	case container.StatusTerminated:
+		return agentregistry.PeerEventContainerTerminated
+	default:
+		return ""
+	}
+}
+
 func registerContainerRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 	c.POST("", func(ctx *gin.Context) {
 		var req createContainerRequest
@@ -80,6 +108,8 @@ func registerContainerRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		notifyContainerPeerEvent(ctx.Request.Context(), infra, agentregistry.PeerEventContainerScheduled, *createdContainer)
 
 		ctx.JSON(http.StatusCreated, createdContainer)
 	})
@@ -123,6 +153,10 @@ func registerContainerRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 			return
 		}
 
+		if event := containerStatusPeerEvent(updatedContainer.Status); event != "" {
+			notifyContainerPeerEvent(ctx.Request.Context(), infra, event, *updatedContainer)
+		}
+
 		ctx.JSON(http.StatusOK, updatedContainer)
 	})
 
@@ -149,6 +183,12 @@ func registerContainerRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 		if err != nil {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
+		}
+
+		if req.OverlayIP != "" {
+			notifyContainerPeerEvent(ctx.Request.Context(), infra, agentregistry.PeerEventContainerUpdated, *updatedContainer)
+		} else if event := containerStatusPeerEvent(updatedContainer.Status); event != "" {
+			notifyContainerPeerEvent(ctx.Request.Context(), infra, event, *updatedContainer)
 		}
 
 		ctx.JSON(http.StatusOK, updatedContainer)

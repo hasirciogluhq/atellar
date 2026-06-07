@@ -12,6 +12,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearNodeOverlayNetwork = `-- name: ClearNodeOverlayNetwork :exec
+UPDATE nodes
+SET overlay_ip = NULL, overlay_subnet = NULL, updated_at = now()
+WHERE id = $1
+`
+
+func (q *Queries) ClearNodeOverlayNetwork(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, clearNodeOverlayNetwork, id)
+	return err
+}
+
 const createJoinToken = `-- name: CreateJoinToken :one
 INSERT INTO node_join_tokens (id, token_hash, single_use, expires_at)
 VALUES ($1, $2, $3, $4)
@@ -71,6 +82,35 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, e
 		arg.ContainerdSock,
 		arg.Status,
 	)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PublicIp,
+		&i.PrivateIp,
+		&i.OverlayIp,
+		&i.OverlaySubnet,
+		&i.Status,
+		&i.LastHeartbeat,
+		&i.AgentVersion,
+		&i.ContainerdSock,
+		&i.TokenHash,
+		&i.TokenExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const evictNode = `-- name: EvictNode :one
+UPDATE nodes
+SET status = 'evicted', updated_at = now()
+WHERE id = $1
+RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at
+`
+
+func (q *Queries) EvictNode(ctx context.Context, id string) (Node, error) {
+	row := q.db.QueryRow(ctx, evictNode, id)
 	var i Node
 	err := row.Scan(
 		&i.ID,
@@ -191,6 +231,32 @@ func (q *Queries) GetNodeByTokenHash(ctx context.Context, tokenHash pgtype.Text)
 	return i, err
 }
 
+const listActiveNodeOverlaySubnets = `-- name: ListActiveNodeOverlaySubnets :many
+SELECT overlay_subnet::text FROM nodes
+WHERE overlay_subnet IS NOT NULL
+  AND status NOT IN ('evicted', 'evicting', 'down')
+`
+
+func (q *Queries) ListActiveNodeOverlaySubnets(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listActiveNodeOverlaySubnets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var overlay_subnet string
+		if err := rows.Scan(&overlay_subnet); err != nil {
+			return nil, err
+		}
+		items = append(items, overlay_subnet)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJoinTokens = `-- name: ListJoinTokens :many
 SELECT id, token_hash, single_use, used_at, used_by, expires_at, created_at FROM node_join_tokens ORDER BY created_at DESC
 `
@@ -216,6 +282,30 @@ func (q *Queries) ListJoinTokens(ctx context.Context) ([]NodeJoinToken, error) {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listNodeOverlaySubnets = `-- name: ListNodeOverlaySubnets :many
+SELECT overlay_subnet::text FROM nodes WHERE overlay_subnet IS NOT NULL
+`
+
+func (q *Queries) ListNodeOverlaySubnets(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listNodeOverlaySubnets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var overlay_subnet string
+		if err := rows.Scan(&overlay_subnet); err != nil {
+			return nil, err
+		}
+		items = append(items, overlay_subnet)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -262,6 +352,38 @@ func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
 	return items, nil
 }
 
+const listReclaimableOverlayNetworks = `-- name: ListReclaimableOverlayNetworks :many
+SELECT id, overlay_subnet::text FROM nodes
+WHERE overlay_subnet IS NOT NULL
+  AND status = 'evicted'
+ORDER BY updated_at ASC
+`
+
+type ListReclaimableOverlayNetworksRow struct {
+	ID            string
+	OverlaySubnet string
+}
+
+func (q *Queries) ListReclaimableOverlayNetworks(ctx context.Context) ([]ListReclaimableOverlayNetworksRow, error) {
+	rows, err := q.db.Query(ctx, listReclaimableOverlayNetworks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListReclaimableOverlayNetworksRow
+	for rows.Next() {
+		var i ListReclaimableOverlayNetworksRow
+		if err := rows.Scan(&i.ID, &i.OverlaySubnet); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markJoinTokenUsed = `-- name: MarkJoinTokenUsed :exec
 UPDATE node_join_tokens
 SET used_at = now(), used_by = $2
@@ -285,6 +407,51 @@ UPDATE nodes SET last_heartbeat = now(), updated_at = now() WHERE id = $1
 func (q *Queries) UpdateNodeHeartbeat(ctx context.Context, id string) error {
 	_, err := q.db.Exec(ctx, updateNodeHeartbeat, id)
 	return err
+}
+
+const updateNodeOverlayNetwork = `-- name: UpdateNodeOverlayNetwork :one
+UPDATE nodes
+SET
+    overlay_ip = $2,
+    overlay_subnet = $3,
+    status = $4,
+    updated_at = now()
+WHERE id = $1
+RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at
+`
+
+type UpdateNodeOverlayNetworkParams struct {
+	ID            string
+	OverlayIp     *netip.Addr
+	OverlaySubnet *netip.Prefix
+	Status        NodeStatus
+}
+
+func (q *Queries) UpdateNodeOverlayNetwork(ctx context.Context, arg UpdateNodeOverlayNetworkParams) (Node, error) {
+	row := q.db.QueryRow(ctx, updateNodeOverlayNetwork,
+		arg.ID,
+		arg.OverlayIp,
+		arg.OverlaySubnet,
+		arg.Status,
+	)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PublicIp,
+		&i.PrivateIp,
+		&i.OverlayIp,
+		&i.OverlaySubnet,
+		&i.Status,
+		&i.LastHeartbeat,
+		&i.AgentVersion,
+		&i.ContainerdSock,
+		&i.TokenHash,
+		&i.TokenExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateNodeToken = `-- name: UpdateNodeToken :one

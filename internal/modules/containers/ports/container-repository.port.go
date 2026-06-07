@@ -57,6 +57,7 @@ type ContainerRepositoryInterface interface {
 	CreateContainerEvent(ctx context.Context, input CreateContainerEventInput) (*containerevent.Entity, error)
 	ListContainerEventsByContainerId(ctx context.Context, containerID string) ([]containerevent.Entity, error)
 	CreateOverlayIPPoolEntry(ctx context.Context, ip net.IP, nodeID string) (*overlayippool.Entity, error)
+	DeleteOverlayIPPoolByNodeId(ctx context.Context, nodeID string) error
 	ListFreeOverlayIPsByNodeId(ctx context.Context, nodeID string) ([]overlayippool.Entity, error)
 	ListOverlayIPsByNodeId(ctx context.Context, nodeID string) ([]overlayippool.Entity, error)
 	AllocateOverlayIP(ctx context.Context, ip net.IP, containerID string) (*overlayippool.Entity, error)

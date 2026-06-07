@@ -22,10 +22,14 @@ type Config struct {
 	GrpcAddr          string    `json:"grpc_addr,omitempty"`
 	NodeID            string    `json:"node_id"`
 	NodeName          string    `json:"node_name,omitempty"`
+	OverlayIP         string    `json:"overlay_ip,omitempty"`
+	OverlaySubnet     string    `json:"overlay_subnet,omitempty"`
 	NodeAPIKey        string    `json:"node_api_key"`
 	APIKeyExpiresAt   time.Time `json:"api_key_expires_at"`
 	ContainerdSock    string    `json:"containerd_sock,omitempty"`
 	HeartbeatInterval string    `json:"heartbeat_interval,omitempty"`
+	BridgeName        string    `json:"bridge_name,omitempty"`
+	ReconcileInterval string    `json:"reconcile_interval,omitempty"`
 }
 
 func (c *Config) ResolveGrpcAddr() string {
@@ -39,6 +43,26 @@ func (c *Config) ResolveGrpcAddr() string {
 	}
 
 	return parsed.Hostname() + ":" + DefaultGrpcPort
+}
+
+func (c *Config) ResolveBridgeName() string {
+	if c.BridgeName != "" {
+		return c.BridgeName
+	}
+	return "atellar0"
+}
+
+func (c *Config) ResolveReconcileInterval() time.Duration {
+	if c.ReconcileInterval == "" {
+		return 30 * time.Second
+	}
+
+	parsed, err := time.ParseDuration(c.ReconcileInterval)
+	if err != nil {
+		return 30 * time.Second
+	}
+
+	return parsed
 }
 
 func Load(path string) (*Config, error) {

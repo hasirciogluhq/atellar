@@ -1,3 +1,6 @@
+-- name: DeleteOverlayIPPoolByNodeId :exec
+DELETE FROM overlay_ip_pool WHERE node_id = $1;
+
 -- name: CreateOverlayIPPoolEntry :one
 INSERT INTO overlay_ip_pool (ip, node_id)
 VALUES ($1, $2)

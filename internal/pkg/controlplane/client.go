@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/node"
+	container "github.com/hasirciogluhq/atellar/internal/modules/containers/domain/container"
 	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
 )
 
@@ -105,4 +106,69 @@ func (c *Client) RenewNodeAPIKey(ctx context.Context, apiKey string) (*node.Node
 	}
 
 	return &result, nil
+}
+
+func (c *Client) ListNodes(ctx context.Context) ([]node.NodeEntity, error) {
+	endpoint := fmt.Sprintf("%s/api/v1/nodes", c.baseURL)
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("list nodes failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	var nodes []node.NodeEntity
+	if err := json.Unmarshal(respBody, &nodes); err != nil {
+		return nil, err
+	}
+
+	return nodes, nil
+}
+
+func (c *Client) ListContainers(ctx context.Context, nodeID string) ([]container.Entity, error) {
+	endpoint := fmt.Sprintf("%s/api/v1/containers", c.baseURL)
+	if nodeID != "" {
+		endpoint += "?node_id=" + nodeID
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("list containers failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	var containers []container.Entity
+	if err := json.Unmarshal(respBody, &containers); err != nil {
+		return nil, err
+	}
+
+	return containers, nil
 }

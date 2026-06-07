@@ -217,6 +217,15 @@ func (r *ContainerRepository) CreateOverlayIPPoolEntry(ctx context.Context, ip n
 	return parseOverlayIPPool(row), nil
 }
 
+func (r *ContainerRepository) DeleteOverlayIPPoolByNodeId(ctx context.Context, nodeID string) error {
+	if err := r.queries.DeleteOverlayIPPoolByNodeId(ctx, nodeID); err != nil {
+		fmt.Println("Error deleting overlay ip pool by node id: ", err)
+		return err
+	}
+
+	return nil
+}
+
 func (r *ContainerRepository) ListFreeOverlayIPsByNodeId(ctx context.Context, nodeID string) ([]overlayippool.Entity, error) {
 	rows, err := r.queries.ListFreeOverlayIPsByNodeId(ctx, nodeID)
 	if err != nil {

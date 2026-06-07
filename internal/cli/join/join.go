@@ -61,6 +61,8 @@ func Execute(ctx context.Context, opts Options) (*agentconfig.Config, error) {
 		ControlPlaneURL:   controlPlaneURL,
 		NodeID:            result.Node.ID,
 		NodeName:          result.Node.Name,
+		OverlayIP:         result.Node.OverlayIP.String(),
+		OverlaySubnet:     result.Node.OverlaySubnet,
 		NodeAPIKey:        result.NodeAPIKey,
 		APIKeyExpiresAt:   result.APIKeyExpiresAt,
 		ContainerdSock:    containerdSock,

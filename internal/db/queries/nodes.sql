@@ -42,3 +42,38 @@ SELECT * FROM node_join_tokens ORDER BY created_at DESC;
 UPDATE node_join_tokens
 SET used_at = now(), used_by = $2
 WHERE id = $1;
+
+-- name: ListActiveNodeOverlaySubnets :many
+SELECT overlay_subnet::text FROM nodes
+WHERE overlay_subnet IS NOT NULL
+  AND status NOT IN ('evicted', 'evicting', 'down');
+
+-- name: ListReclaimableOverlayNetworks :many
+SELECT id, overlay_subnet::text FROM nodes
+WHERE overlay_subnet IS NOT NULL
+  AND status = 'evicted'
+ORDER BY updated_at ASC;
+
+-- name: EvictNode :one
+UPDATE nodes
+SET status = 'evicted', updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: ClearNodeOverlayNetwork :exec
+UPDATE nodes
+SET overlay_ip = NULL, overlay_subnet = NULL, updated_at = now()
+WHERE id = $1;
+
+-- name: ListNodeOverlaySubnets :many
+SELECT overlay_subnet::text FROM nodes WHERE overlay_subnet IS NOT NULL;
+
+-- name: UpdateNodeOverlayNetwork :one
+UPDATE nodes
+SET
+    overlay_ip = $2,
+    overlay_subnet = $3,
+    status = $4,
+    updated_at = now()
+WHERE id = $1
+RETURNING *;

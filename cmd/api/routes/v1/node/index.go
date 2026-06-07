@@ -13,4 +13,6 @@ func RegisterNodeRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 	registerNodeAuthRoutes(group, infra)
 	registerHeartbeatRoutes(group, infra)
 	registerListNodeRoutes(group, infra)
+	registerEvictNodeRoutes(group, infra)
+	registerNodeOverlayRoutes(group, infra)
 }

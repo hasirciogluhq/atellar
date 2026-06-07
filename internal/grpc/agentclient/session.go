@@ -2,6 +2,7 @@ package agentclient
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -11,18 +12,24 @@ import (
 	"github.com/hasirciogluhq/atellar/internal/pkg/agentconfig"
 	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
 	"github.com/hasirciogluhq/atellar/internal/pkg/nodetoken"
+	"github.com/hasirciogluhq/atellar/internal/pkg/overlaynet"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+type networkReconciler interface {
+	HandlePeerEvent(event overlaynet.PeerEvent)
+}
 
 type Session struct {
 	cfg        *agentconfig.Config
 	configPath string
 	conn       *grpc.ClientConn
 	client     atellarv1.AgentServiceClient
+	network    networkReconciler
 }
 
-func NewSession(cfg *agentconfig.Config, configPath string) (*Session, error) {
+func NewSession(cfg *agentconfig.Config, configPath string, network networkReconciler) (*Session, error) {
 	conn, err := grpc.NewClient(
 		cfg.ResolveGrpcAddr(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -36,6 +43,7 @@ func NewSession(cfg *agentconfig.Config, configPath string) (*Session, error) {
 		configPath: configPath,
 		conn:       conn,
 		client:     atellarv1.NewAgentServiceClient(conn),
+		network:    network,
 	}, nil
 }
 
@@ -99,12 +107,42 @@ func (s *Session) recvLoop(stream grpc.BidiStreamingClient[atellarv1.AgentEnvelo
 			return err
 		}
 
-		switch msg.Payload.(type) {
+		switch payload := msg.Payload.(type) {
 		case *atellarv1.ServerEnvelope_RpcCall:
-			continue
+			s.handleRpcCall(payload.RpcCall)
 		default:
 			continue
 		}
+	}
+}
+
+func (s *Session) handleRpcCall(call *atellarv1.RpcCall) {
+	if call == nil {
+		return
+	}
+
+	switch call.GetMethod() {
+	case "reconcile.trigger":
+		var payload overlaynet.PeerEvent
+		if err := json.Unmarshal(call.GetPayload(), &payload); err != nil {
+			log.Printf("reconcile.trigger invalid payload: %v", err)
+			return
+		}
+
+		log.Printf(
+			"reconcile.trigger event=%s node_id=%s container_id=%s overlay_ip=%s overlay_subnet=%s",
+			payload.Event,
+			payload.NodeID,
+			payload.ContainerID,
+			payload.OverlayIP,
+			payload.OverlaySubnet,
+		)
+
+		if s.network != nil {
+			s.network.HandlePeerEvent(payload)
+		}
+	default:
+		log.Printf("unhandled rpc call method=%s", call.GetMethod())
 	}
 }
 

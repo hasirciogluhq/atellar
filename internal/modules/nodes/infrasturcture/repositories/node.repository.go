@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"time"
 
 	db_generated "github.com/hasirciogluhq/atellar/internal/db/generated"
@@ -227,6 +228,73 @@ func (r *NodeRepository) MarkJoinTokenUsed(ctx context.Context, tokenID, nodeID 
 	}
 
 	return nil
+}
+
+func (r *NodeRepository) ListActiveNodeOverlaySubnets(ctx context.Context) ([]string, error) {
+	subnets, err := r.queries.ListActiveNodeOverlaySubnets(ctx)
+	if err != nil {
+		fmt.Println("Error listing active node overlay subnets: ", err)
+		return nil, err
+	}
+
+	return subnets, nil
+}
+
+func (r *NodeRepository) ListReclaimableOverlayNetworks(ctx context.Context) ([]ports.ReclaimableOverlayNetwork, error) {
+	rows, err := r.queries.ListReclaimableOverlayNetworks(ctx)
+	if err != nil {
+		fmt.Println("Error listing reclaimable overlay networks: ", err)
+		return nil, err
+	}
+
+	result := make([]ports.ReclaimableOverlayNetwork, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, ports.ReclaimableOverlayNetwork{
+			NodeID:     row.ID,
+			SubnetCIDR: row.OverlaySubnet,
+		})
+	}
+
+	return result, nil
+}
+
+func (r *NodeRepository) ClearNodeOverlayNetwork(ctx context.Context, nodeID string) error {
+	if err := r.queries.ClearNodeOverlayNetwork(ctx, nodeID); err != nil {
+		fmt.Println("Error clearing node overlay network: ", err)
+		return err
+	}
+
+	return nil
+}
+
+func (r *NodeRepository) EvictNode(ctx context.Context, nodeID string) (*node.NodeEntity, error) {
+	row, err := r.queries.EvictNode(ctx, nodeID)
+	if err != nil {
+		fmt.Println("Error evicting node: ", err)
+		return nil, err
+	}
+
+	return parseNode(row), nil
+}
+
+func (r *NodeRepository) UpdateNodeOverlayNetwork(ctx context.Context, nodeID string, overlayIP net.IP, subnetCIDR string, status node.NodeStatus) (*node.NodeEntity, error) {
+	prefix, err := pgutil.CIDRToPrefix(subnetCIDR)
+	if err != nil {
+		return nil, err
+	}
+
+	row, err := r.queries.UpdateNodeOverlayNetwork(ctx, db_generated.UpdateNodeOverlayNetworkParams{
+		ID:            nodeID,
+		OverlayIp:     pgutil.NetIPToAddr(overlayIP),
+		OverlaySubnet: prefix,
+		Status:        db_generated.NodeStatus(status),
+	})
+	if err != nil {
+		fmt.Println("Error updating node overlay network: ", err)
+		return nil, err
+	}
+
+	return parseNode(row), nil
 }
 
 func parseNode(row db_generated.Node) *node.NodeEntity {

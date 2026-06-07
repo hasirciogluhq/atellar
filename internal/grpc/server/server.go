@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/hasirciogluhq/atellar/cmd/api/shared"
 	"google.golang.org/grpc"
 )
 
-func ListenAndServe(port string, infra *shared.Infrastructure) error {
+func ListenAndServe(port string, deps Deps) error {
 	grpcServer := grpc.NewServer()
 
-	agentService := NewAgentService(infra)
+	agentService := NewAgentService(deps)
 	agentService.Register(grpcServer)
 
 	listener, err := net.Listen("tcp", ":"+port)

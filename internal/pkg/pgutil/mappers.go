@@ -40,6 +40,15 @@ func PrefixToString(prefix *netip.Prefix) string {
 	return prefix.String()
 }
 
+func CIDRToPrefix(cidr string) (*netip.Prefix, error) {
+	prefix, err := netip.ParsePrefix(cidr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &prefix, nil
+}
+
 func TextToString(value pgtype.Text) *string {
 	if !value.Valid {
 		return nil

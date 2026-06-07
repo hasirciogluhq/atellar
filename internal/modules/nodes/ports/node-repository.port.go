@@ -30,4 +30,14 @@ type NodeRepositoryInterface interface {
 	GetJoinToken(ctx context.Context, plainToken string) (*joinToken.JoinTokenEntity, error)
 	ListJoinTokens(ctx context.Context) ([]joinToken.JoinTokenEntity, error)
 	MarkJoinTokenUsed(ctx context.Context, tokenID, nodeID string) error
+	ListActiveNodeOverlaySubnets(ctx context.Context) ([]string, error)
+	ListReclaimableOverlayNetworks(ctx context.Context) ([]ReclaimableOverlayNetwork, error)
+	ClearNodeOverlayNetwork(ctx context.Context, nodeID string) error
+	EvictNode(ctx context.Context, nodeID string) (*node.NodeEntity, error)
+	UpdateNodeOverlayNetwork(ctx context.Context, nodeID string, overlayIP net.IP, subnetCIDR string, status node.NodeStatus) (*node.NodeEntity, error)
+}
+
+type ReclaimableOverlayNetwork struct {
+	NodeID     string
+	SubnetCIDR string
 }
