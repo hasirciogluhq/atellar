@@ -17,15 +17,15 @@ func NewCreateJoinTokenUseCase(nodeRepository ports.NodeRepositoryInterface) *Cr
 	return &CreateJoinTokenUseCase{nodeRepository: nodeRepository}
 }
 
-func (u *CreateJoinTokenUseCase) Execute(ctx context.Context, expiresAt *time.Time) (*joinToken.JoinTokenEntity, error) {
-	joinToken, err := u.nodeRepository.CreateJoinToken(ctx, expiresAt)
+func (u *CreateJoinTokenUseCase) Execute(ctx context.Context, expiresAt *time.Time, singleUse bool) (*joinToken.JoinTokenCreateResult, error) {
+	createdToken, err := u.nodeRepository.CreateJoinToken(ctx, expiresAt, singleUse)
 	if err != nil {
 		return nil, err
 	}
 
-	if joinToken == nil {
+	if createdToken == nil {
 		return nil, errors.New("failed to create join token")
 	}
 
-	return joinToken, nil
+	return createdToken, nil
 }

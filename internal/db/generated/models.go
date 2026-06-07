@@ -7,20 +7,119 @@ package db_generated
 import (
 	"database/sql/driver"
 	"fmt"
+	"net/netip"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ContainerEventType string
+
+const (
+	ContainerEventTypeScheduled    ContainerEventType = "scheduled"
+	ContainerEventTypePullStarted  ContainerEventType = "pull_started"
+	ContainerEventTypePullFinished ContainerEventType = "pull_finished"
+	ContainerEventTypePullFailed   ContainerEventType = "pull_failed"
+	ContainerEventTypeCreated      ContainerEventType = "created"
+	ContainerEventTypeStarted      ContainerEventType = "started"
+	ContainerEventTypeStopped      ContainerEventType = "stopped"
+	ContainerEventTypeCrashed      ContainerEventType = "crashed"
+	ContainerEventTypeTerminated   ContainerEventType = "terminated"
+	ContainerEventTypeRestart      ContainerEventType = "restart"
+)
+
+func (e *ContainerEventType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ContainerEventType(s)
+	case string:
+		*e = ContainerEventType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ContainerEventType: %T", src)
+	}
+	return nil
+}
+
+type NullContainerEventType struct {
+	ContainerEventType ContainerEventType
+	Valid              bool // Valid is true if ContainerEventType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullContainerEventType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ContainerEventType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ContainerEventType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullContainerEventType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ContainerEventType), nil
+}
+
+type ContainerStatus string
+
+const (
+	ContainerStatusPending    ContainerStatus = "pending"
+	ContainerStatusScheduled  ContainerStatus = "scheduled"
+	ContainerStatusPulling    ContainerStatus = "pulling"
+	ContainerStatusCreating   ContainerStatus = "creating"
+	ContainerStatusRunning    ContainerStatus = "running"
+	ContainerStatusStopped    ContainerStatus = "stopped"
+	ContainerStatusCrashed    ContainerStatus = "crashed"
+	ContainerStatusTerminated ContainerStatus = "terminated"
+)
+
+func (e *ContainerStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ContainerStatus(s)
+	case string:
+		*e = ContainerStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ContainerStatus: %T", src)
+	}
+	return nil
+}
+
+type NullContainerStatus struct {
+	ContainerStatus ContainerStatus
+	Valid           bool // Valid is true if ContainerStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullContainerStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.ContainerStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ContainerStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullContainerStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ContainerStatus), nil
+}
+
 type NodeStatus string
 
 const (
+	NodeStatusPending     NodeStatus = "pending"
 	NodeStatusReady       NodeStatus = "ready"
 	NodeStatusNotReady    NodeStatus = "not_ready"
-	NodeStatusDown        NodeStatus = "down"
 	NodeStatusMaintenance NodeStatus = "maintenance"
 	NodeStatusEvicting    NodeStatus = "evicting"
 	NodeStatusEvicted     NodeStatus = "evicted"
-	NodeStatusPending     NodeStatus = "pending"
+	NodeStatusDown        NodeStatus = "down"
 )
 
 func (e *NodeStatus) Scan(src interface{}) error {
@@ -58,20 +157,74 @@ func (ns NullNodeStatus) Value() (driver.Value, error) {
 	return string(ns.NodeStatus), nil
 }
 
+type Container struct {
+	ID             string
+	NodeID         string
+	ContainerdNs   string
+	ContainerdID   pgtype.Text
+	SnapshotKey    pgtype.Text
+	TaskPid        pgtype.Int4
+	Image          string
+	ImageDigest    pgtype.Text
+	Command        []string
+	Entrypoint     []string
+	Env            []byte
+	WorkingDir     pgtype.Text
+	OverlayIp      *netip.Addr
+	ExposedPorts   []byte
+	CpuLimit       pgtype.Numeric
+	CpuShares      pgtype.Int4
+	MemoryLimitMib pgtype.Int4
+	Status         ContainerStatus
+	ExitCode       pgtype.Int4
+	ErrorMessage   pgtype.Text
+	RestartCount   int32
+	RestartPolicy  string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	ScheduledAt    pgtype.Timestamptz
+	StartedAt      pgtype.Timestamptz
+	StoppedAt      pgtype.Timestamptz
+}
+
+type ContainerEvent struct {
+	ID          string
+	ContainerID string
+	NodeID      string
+	Event       ContainerEventType
+	Message     pgtype.Text
+	Metadata    []byte
+	CreatedAt   pgtype.Timestamptz
+}
+
 type Node struct {
-	ID            string
-	Name          string
-	PublicIp      pgtype.Text
-	PrivateIp     pgtype.Text
-	Status        NodeStatus
-	LastHeartbeat pgtype.Timestamptz
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	ID             string
+	Name           string
+	PublicIp       *netip.Addr
+	PrivateIp      *netip.Addr
+	OverlayIp      *netip.Addr
+	OverlaySubnet  *netip.Prefix
+	Status         NodeStatus
+	LastHeartbeat  pgtype.Timestamptz
+	AgentVersion   pgtype.Text
+	ContainerdSock string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
 }
 
 type NodeJoinToken struct {
 	ID        string
-	Token     string
+	TokenHash string
+	SingleUse bool
+	UsedAt    pgtype.Timestamptz
+	UsedBy    pgtype.Text
 	ExpiresAt pgtype.Timestamptz
 	CreatedAt pgtype.Timestamptz
+}
+
+type OverlayIpPool struct {
+	Ip          netip.Addr
+	NodeID      string
+	ContainerID pgtype.Text
+	AllocatedAt pgtype.Timestamptz
 }

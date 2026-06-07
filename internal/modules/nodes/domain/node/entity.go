@@ -8,22 +8,26 @@ import (
 type NodeStatus string
 
 const (
+	NodeStatusPending     NodeStatus = "pending"
 	NodeStatusReady       NodeStatus = "ready"
 	NodeStatusNotReady    NodeStatus = "not_ready"
-	NodeStatusDown        NodeStatus = "down"
 	NodeStatusMaintenance NodeStatus = "maintenance"
 	NodeStatusEvicting    NodeStatus = "evicting"
 	NodeStatusEvicted     NodeStatus = "evicted"
-	NodeStatusPending     NodeStatus = "pending"
+	NodeStatusDown        NodeStatus = "down"
 )
 
 type NodeEntity struct {
-	ID            string     `json:"id"`
-	Name          string     `json:"name"`
-	PublicIP      net.IP     `json:"public_ip" omitempty:"true"`
-	PrivateIP     net.IP     `json:"private_ip" omitempty:"true"`
-	Status        NodeStatus `json:"status" omitempty:"true" default:"pending"`
-	LastHeartbeat *time.Time `json:"last_heartbeat" omitempty:"true"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	PublicIP       net.IP     `json:"public_ip,omitempty"`
+	PrivateIP      net.IP     `json:"private_ip,omitempty"`
+	OverlayIP      net.IP     `json:"overlay_ip,omitempty"`
+	OverlaySubnet  string     `json:"overlay_subnet,omitempty"`
+	Status         NodeStatus `json:"status"`
+	LastHeartbeat  *time.Time `json:"last_heartbeat,omitempty"`
+	AgentVersion   *string    `json:"agent_version,omitempty"`
+	ContainerdSock string     `json:"containerd_sock"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }

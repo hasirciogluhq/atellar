@@ -2,11 +2,13 @@ package shared
 
 import (
 	db_generated "github.com/hasirciogluhq/atellar/internal/db/generated"
-	postgres "github.com/hasirciogluhq/atellar/internal/modules/nodes/infrasturcture/repositories"
+	containerPostgres "github.com/hasirciogluhq/atellar/internal/modules/containers/infrasturcture/repositories"
+	nodePostgres "github.com/hasirciogluhq/atellar/internal/modules/nodes/infrasturcture/repositories"
 )
 
 type Repositories struct {
-	Nodes *postgres.NodeRepository
+	Nodes      *nodePostgres.NodeRepository
+	Containers *containerPostgres.ContainerRepository
 }
 
 type Infrastructure struct {
@@ -15,15 +17,16 @@ type Infrastructure struct {
 
 func LoadInfrastructure(database *Database) *Infrastructure {
 	queries := db_generated.New(database.PgxConn)
-	repositories := loadRepositories(database, queries)
+	repositories := loadRepositories(queries)
 
 	return &Infrastructure{
 		Repositories: *repositories,
 	}
 }
 
-func loadRepositories(database *Database, queries *db_generated.Queries) *Repositories {
+func loadRepositories(queries *db_generated.Queries) *Repositories {
 	return &Repositories{
-		Nodes: postgres.NewNodeRepository(queries),
+		Nodes:      nodePostgres.NewNodeRepository(queries),
+		Containers: containerPostgres.NewContainerRepository(queries),
 	}
 }

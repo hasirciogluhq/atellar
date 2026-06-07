@@ -2,18 +2,17 @@ package postgres
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log"
-	"net"
 	"time"
 
 	db_generated "github.com/hasirciogluhq/atellar/internal/db/generated"
 	joinToken "github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/join-token"
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/node"
+	"github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
+	"github.com/hasirciogluhq/atellar/internal/pkg/pgutil"
+	"github.com/hasirciogluhq/atellar/internal/pkg/tokenhash"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type NodeRepository struct {
@@ -41,11 +40,10 @@ func (r *NodeRepository) GetNodeById(ctx context.Context, nodeID string) (*node.
 		}
 
 		fmt.Println("Error getting node by id: ", err)
-
 		return nil, err
 	}
 
-	return r.ParseRestNode(row), nil
+	return parseNode(row), nil
 }
 
 func (r *NodeRepository) GetNodeByName(ctx context.Context, nodeName string) (*node.NodeEntity, error) {
@@ -56,75 +54,101 @@ func (r *NodeRepository) GetNodeByName(ctx context.Context, nodeName string) (*n
 		}
 
 		fmt.Println("Error getting node by name: ", err)
-
 		return nil, err
 	}
 
-	return r.ParseRestNode(row), nil
+	return parseNode(row), nil
 }
 
-func (r *NodeRepository) CreateNode(ctx context.Context, name string, publicIP, privateIP net.IP) (*node.NodeEntity, error) {
-	nodeID, err := generatePrefixedID("node_")
+func (r *NodeRepository) ListNodes(ctx context.Context) ([]node.NodeEntity, error) {
+	rows, err := r.queries.ListNodes(ctx)
+	if err != nil {
+		fmt.Println("Error listing nodes: ", err)
+		return nil, err
+	}
+
+	nodes := make([]node.NodeEntity, 0, len(rows))
+	for _, row := range rows {
+		nodes = append(nodes, *parseNode(row))
+	}
+
+	return nodes, nil
+}
+
+func (r *NodeRepository) CreateNode(ctx context.Context, input ports.CreateNodeInput) (*node.NodeEntity, error) {
+	nodeID, err := pgutil.GeneratePrefixedID("node_")
 	if err != nil {
 		return nil, err
 	}
 
+	name := input.Name
 	if name == "" {
 		name = nodeID
 	}
 
+	containerdSock := input.ContainerdSock
+	if containerdSock == "" {
+		containerdSock = "/run/containerd/containerd.sock"
+	}
+
 	row, err := r.queries.CreateNode(ctx, db_generated.CreateNodeParams{
-		ID:        nodeID,
-		Name:      name,
-		PublicIp:  ipToText(publicIP),
-		PrivateIp: ipToText(privateIP),
-		Status:    db_generated.NodeStatusPending,
+		ID:             nodeID,
+		Name:           name,
+		PublicIp:       pgutil.NetIPToAddr(input.PublicIP),
+		PrivateIp:      pgutil.NetIPToAddr(input.PrivateIP),
+		AgentVersion:   pgutil.StringToText(input.AgentVersion),
+		ContainerdSock: containerdSock,
+		Status:         db_generated.NodeStatusPending,
 	})
 	if err != nil {
 		fmt.Println("Error creating node: ", err)
 		return nil, err
 	}
 
-	return r.ParseRestNode(row), nil
+	return parseNode(row), nil
 }
 
-func (r *NodeRepository) CreateJoinToken(ctx context.Context, expiresAt *time.Time) (*joinToken.JoinTokenEntity, error) {
-	tokenID, err := generatePrefixedID("jtok_")
+func (r *NodeRepository) CreateJoinToken(ctx context.Context, expiresAt *time.Time, singleUse bool) (*joinToken.JoinTokenCreateResult, error) {
+	tokenID, err := pgutil.GeneratePrefixedID("jtok_")
 	if err != nil {
 		return nil, err
 	}
 
-	tokenValue, err := generateRandomHex(32)
+	plainToken, err := pgutil.GenerateRandomHex(32)
 	if err != nil {
 		return nil, err
 	}
 
 	row, err := r.queries.CreateJoinToken(ctx, db_generated.CreateJoinTokenParams{
 		ID:        tokenID,
-		Token:     tokenValue,
-		ExpiresAt: timeToTimestamptz(expiresAt),
+		TokenHash: tokenhash.Hash(plainToken),
+		SingleUse: singleUse,
+		ExpiresAt: pgutil.TimeToTimestamptz(expiresAt),
 	})
 	if err != nil {
 		fmt.Println("Error creating join token: ", err)
 		return nil, err
 	}
 
-	return r.parseJoinToken(row), nil
+	entity := parseJoinToken(row)
+	return &joinToken.JoinTokenCreateResult{
+		JoinTokenEntity: *entity,
+		Token:           plainToken,
+	}, nil
 }
 
-func (r *NodeRepository) GetJoinToken(ctx context.Context, token string) (*joinToken.JoinTokenEntity, error) {
-	row, err := r.queries.GetJoinTokenByToken(ctx, token)
+func (r *NodeRepository) GetJoinToken(ctx context.Context, plainToken string) (*joinToken.JoinTokenEntity, error) {
+	row, err := r.queries.GetJoinTokenByHash(ctx, tokenhash.Hash(plainToken))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 
 		fmt.Println("Error getting join token: ", err)
-
 		return nil, err
 	}
 
-	return r.parseJoinToken(row), nil
+	return parseJoinToken(row), nil
 }
 
 func (r *NodeRepository) ListJoinTokens(ctx context.Context) ([]joinToken.JoinTokenEntity, error) {
@@ -136,83 +160,49 @@ func (r *NodeRepository) ListJoinTokens(ctx context.Context) ([]joinToken.JoinTo
 
 	joinTokens := make([]joinToken.JoinTokenEntity, 0, len(rows))
 	for _, row := range rows {
-		joinTokens = append(joinTokens, *r.parseJoinToken(row))
+		joinTokens = append(joinTokens, *parseJoinToken(row))
 	}
 
 	return joinTokens, nil
 }
 
-func (r *NodeRepository) ParseRestNode(row db_generated.Node) *node.NodeEntity {
-	publicIP := net.ParseIP(row.PublicIp.String)
-	if publicIP == nil {
-		publicIP = nil
-	}
-	privateIP := net.ParseIP(row.PrivateIp.String)
-	if privateIP == nil {
-		privateIP = nil
-	}
-
-	var lastHeartbeat *time.Time
-	if row.LastHeartbeat.Valid {
-		lastHeartbeat = &row.LastHeartbeat.Time
+func (r *NodeRepository) MarkJoinTokenUsed(ctx context.Context, tokenID, nodeID string) error {
+	err := r.queries.MarkJoinTokenUsed(ctx, db_generated.MarkJoinTokenUsedParams{
+		ID:     tokenID,
+		UsedBy: pgutil.OptionalStringToText(nodeID),
+	})
+	if err != nil {
+		fmt.Println("Error marking join token used: ", err)
+		return err
 	}
 
+	return nil
+}
+
+func parseNode(row db_generated.Node) *node.NodeEntity {
 	return &node.NodeEntity{
-		ID:            row.ID,
-		Name:          row.Name,
-		PublicIP:      publicIP,
-		PrivateIP:     privateIP,
-		Status:        node.NodeStatus(row.Status),
-		LastHeartbeat: lastHeartbeat,
-		CreatedAt:     row.CreatedAt.Time,
-		UpdatedAt:     row.UpdatedAt.Time,
+		ID:             row.ID,
+		Name:           row.Name,
+		PublicIP:       pgutil.AddrToNetIP(row.PublicIp),
+		PrivateIP:      pgutil.AddrToNetIP(row.PrivateIp),
+		OverlayIP:      pgutil.AddrToNetIP(row.OverlayIp),
+		OverlaySubnet:  pgutil.PrefixToString(row.OverlaySubnet),
+		Status:         node.NodeStatus(row.Status),
+		LastHeartbeat:  pgutil.TimestamptzToTime(row.LastHeartbeat),
+		AgentVersion:   pgutil.TextToString(row.AgentVersion),
+		ContainerdSock: row.ContainerdSock,
+		CreatedAt:      row.CreatedAt.Time,
+		UpdatedAt:      row.UpdatedAt.Time,
 	}
 }
 
-func (r *NodeRepository) parseJoinToken(row db_generated.NodeJoinToken) *joinToken.JoinTokenEntity {
-	var expiresAt *time.Time
-	if row.ExpiresAt.Valid {
-		expiresAt = &row.ExpiresAt.Time
-	}
-
+func parseJoinToken(row db_generated.NodeJoinToken) *joinToken.JoinTokenEntity {
 	return &joinToken.JoinTokenEntity{
 		ID:        row.ID,
-		Token:     row.Token,
-		ExpiresAt: expiresAt,
+		SingleUse: row.SingleUse,
+		UsedAt:    pgutil.TimestamptzToTime(row.UsedAt),
+		UsedBy:    pgutil.TextToString(row.UsedBy),
+		ExpiresAt: pgutil.TimestamptzToTime(row.ExpiresAt),
 		CreatedAt: row.CreatedAt.Time,
 	}
-}
-
-func ipToText(ip net.IP) pgtype.Text {
-	if ip == nil {
-		return pgtype.Text{}
-	}
-
-	return pgtype.Text{String: ip.String(), Valid: true}
-}
-
-func timeToTimestamptz(value *time.Time) pgtype.Timestamptz {
-	if value == nil {
-		return pgtype.Timestamptz{}
-	}
-
-	return pgtype.Timestamptz{Time: *value, Valid: true}
-}
-
-func generatePrefixedID(prefix string) (string, error) {
-	randomPart, err := generateRandomHex(8)
-	if err != nil {
-		return "", err
-	}
-
-	return prefix + randomPart, nil
-}
-
-func generateRandomHex(byteLength int) (string, error) {
-	bytes := make([]byte, byteLength)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(bytes), nil
 }

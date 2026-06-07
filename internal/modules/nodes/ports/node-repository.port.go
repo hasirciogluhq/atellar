@@ -9,12 +9,22 @@ import (
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/node"
 )
 
+type CreateNodeInput struct {
+	Name           string
+	PublicIP       net.IP
+	PrivateIP      net.IP
+	AgentVersion   *string
+	ContainerdSock string
+}
+
 type NodeRepositoryInterface interface {
 	UpdateNodeHeartbeat(ctx context.Context, nodeID string) error
 	GetNodeById(ctx context.Context, nodeID string) (*node.NodeEntity, error)
 	GetNodeByName(ctx context.Context, nodeName string) (*node.NodeEntity, error)
-	CreateNode(ctx context.Context, name string, publicIP, privateIP net.IP) (*node.NodeEntity, error)
-	CreateJoinToken(ctx context.Context, expiresAt *time.Time) (*joinToken.JoinTokenEntity, error)
-	GetJoinToken(ctx context.Context, token string) (*joinToken.JoinTokenEntity, error)
+	ListNodes(ctx context.Context) ([]node.NodeEntity, error)
+	CreateNode(ctx context.Context, input CreateNodeInput) (*node.NodeEntity, error)
+	CreateJoinToken(ctx context.Context, expiresAt *time.Time, singleUse bool) (*joinToken.JoinTokenCreateResult, error)
+	GetJoinToken(ctx context.Context, plainToken string) (*joinToken.JoinTokenEntity, error)
 	ListJoinTokens(ctx context.Context) ([]joinToken.JoinTokenEntity, error)
+	MarkJoinTokenUsed(ctx context.Context, tokenID, nodeID string) error
 }

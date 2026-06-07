@@ -41,8 +41,7 @@ CREATE TABLE nodes (
 -- NODE JOIN TOKENS
 CREATE TABLE node_join_tokens (
     id TEXT PRIMARY KEY NOT NULL,
-    token TEXT NOT NULL UNIQUE,
-    -- tek kullanımlık mı?
+    token_hash TEXT NOT NULL UNIQUE,
     single_use BOOLEAN NOT NULL DEFAULT true,
     used_at TIMESTAMPTZ DEFAULT NULL,
     used_by TEXT REFERENCES nodes (id) DEFAULT NULL,
@@ -62,7 +61,6 @@ CREATE TABLE overlay_ip_pool (
 CREATE TABLE containers (
     id              TEXT PRIMARY KEY NOT NULL,
     node_id         TEXT NOT NULL REFERENCES nodes(id),
-
 -- containerd specifics
 -- namespace: containerd multi-tenant namespace (default "atellar")
 containerd_ns TEXT NOT NULL DEFAULT 'atellar',

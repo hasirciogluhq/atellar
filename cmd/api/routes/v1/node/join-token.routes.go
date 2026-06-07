@@ -11,6 +11,7 @@ import (
 
 type createJoinTokenRequest struct {
 	ExpiresAt *time.Time `json:"expires_at"`
+	SingleUse *bool      `json:"single_use"`
 }
 
 func registerJoinTokenRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
@@ -23,8 +24,13 @@ func registerJoinTokenRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {
 			}
 		}
 
+		singleUse := true
+		if req.SingleUse != nil {
+			singleUse = *req.SingleUse
+		}
+
 		useCase := usecases.NewCreateJoinTokenUseCase(infra.Repositories.Nodes)
-		joinToken, err := useCase.Execute(c.Request.Context(), req.ExpiresAt)
+		joinToken, err := useCase.Execute(c.Request.Context(), req.ExpiresAt, singleUse)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

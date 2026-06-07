@@ -10,6 +10,15 @@ import (
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
 )
 
+type RegisterNodeInput struct {
+	Token          string
+	Name           string
+	PublicIP       net.IP
+	PrivateIP      net.IP
+	AgentVersion   *string
+	ContainerdSock string
+}
+
 type NodeRegisterUseCase struct {
 	nodeRepository ports.NodeRepositoryInterface
 }
@@ -18,12 +27,12 @@ func NewNodeRegisterUseCase(nodeRepository ports.NodeRepositoryInterface) *NodeR
 	return &NodeRegisterUseCase{nodeRepository: nodeRepository}
 }
 
-func (u *NodeRegisterUseCase) Execute(ctx context.Context, token, name string, publicIP, privateIP net.IP) (*node.NodeEntity, error) {
-	if token == "" {
+func (u *NodeRegisterUseCase) Execute(ctx context.Context, input RegisterNodeInput) (*node.NodeEntity, error) {
+	if input.Token == "" {
 		return nil, errors.New("join token is required")
 	}
 
-	joinToken, err := u.nodeRepository.GetJoinToken(ctx, token)
+	joinToken, err := u.nodeRepository.GetJoinToken(ctx, input.Token)
 	if err != nil {
 		return nil, err
 	}
@@ -36,13 +45,27 @@ func (u *NodeRegisterUseCase) Execute(ctx context.Context, token, name string, p
 		return nil, errors.New("join token expired")
 	}
 
-	createdNode, err := u.nodeRepository.CreateNode(ctx, name, publicIP, privateIP)
+	if joinToken.SingleUse && joinToken.UsedAt != nil {
+		return nil, errors.New("join token already used")
+	}
+
+	createdNode, err := u.nodeRepository.CreateNode(ctx, ports.CreateNodeInput{
+		Name:           input.Name,
+		PublicIP:       input.PublicIP,
+		PrivateIP:      input.PrivateIP,
+		AgentVersion:   input.AgentVersion,
+		ContainerdSock: input.ContainerdSock,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	if createdNode == nil {
 		return nil, errors.New("failed to register node")
+	}
+
+	if err := u.nodeRepository.MarkJoinTokenUsed(ctx, joinToken.ID, createdNode.ID); err != nil {
+		return nil, err
 	}
 
 	return createdNode, nil
