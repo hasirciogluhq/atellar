@@ -1,0 +1,27 @@
+# Git / IDE
+.git
+.github
+.cursor
+.idea
+.vscode
+**/.DS_Store
+
+# Docs / scripts (not needed to build api)
+docs
+scripts
+*.md
+!cmd/api/.env.example
+
+# Release artifacts
+dist
+
+# Other binaries (api image only)
+cmd/agent
+cmd/atelctl
+internal/agent
+internal/atelctl
+pkg
+
+# Local env / compose overrides
+.env
+.env.*
