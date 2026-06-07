@@ -85,20 +85,17 @@ atelctl cluster nodes list \
 
 Each GitHub release includes `install.sh` and `uninstall.sh` (also under `scripts/release/` in the repo).
 
-```bash
-# download release and install all binaries (api + agent + atelctl)
-curl -fsSL https://github.com/hasirciogluhq/atellar/releases/download/v0.1.0/install.sh | sudo bash -s -- \
-  --version v0.1.0 \
-  --join-token <TOKEN> \
-  --name node-1 \
-  --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5 \
-  --control-plane-address cp-host \
-  --http-port 8080 \
-  --grpc-port 9090
+`install.sh` only installs binaries and migrations. It prompts for a version and does not start services.
 
-# control plane only
-sudo bash install.sh --local --database-url 'postgres://...'
+```bash
+# interactive — asks for version
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
+
+# non-interactive
+curl -fsSL .../install.sh | sudo bash -s -- --version v0.1.0
+
+# from extracted tarball
+sudo ./install.sh --local
 
 # remove everything (api, agent, atelctl, config, migrations, workloads)
 sudo ./uninstall.sh --yes

@@ -14,13 +14,13 @@ curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
   -H "Content-Type: application/json" \
   -d '{"single_use": true}'
 
-# 3. Install from GitHub release (control plane + agent + atelctl)
-curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash -s -- \
-  --version v0.1.0 \
-  --database-url "$DATABASE_URL" \
-  --join-token <PLAIN_TOKEN> --name node-1 \
-  --public-ip <PUBLIC_IP> --private-ip <PRIVATE_IP> \
-  --control-plane-address <CP_HOST> --http-port 8080 --grpc-port 9090
+# 3. Install binaries from GitHub release (prompts for version)
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
+
+# 4. Start control plane, then join agent (see docs/getting-started.md)
+export DATABASE_URL="postgresql://..."
+export MIGRATIONS_PATH=/usr/share/atellar/migrations
+atellar-api
 ```
 
 ## Components
