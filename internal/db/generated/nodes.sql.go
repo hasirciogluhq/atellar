@@ -48,7 +48,7 @@ func (q *Queries) CreateJoinToken(ctx context.Context, arg CreateJoinTokenParams
 const createNode = `-- name: CreateNode :one
 INSERT INTO nodes (id, name, public_ip, private_ip, agent_version, containerd_sock, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, created_at, updated_at
+RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at
 `
 
 type CreateNodeParams struct {
@@ -83,6 +83,8 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, e
 		&i.LastHeartbeat,
 		&i.AgentVersion,
 		&i.ContainerdSock,
+		&i.TokenHash,
+		&i.TokenExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -109,7 +111,7 @@ func (q *Queries) GetJoinTokenByHash(ctx context.Context, tokenHash string) (Nod
 }
 
 const getNodeById = `-- name: GetNodeById :one
-SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, created_at, updated_at FROM nodes WHERE id = $1
+SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at FROM nodes WHERE id = $1
 `
 
 func (q *Queries) GetNodeById(ctx context.Context, id string) (Node, error) {
@@ -126,6 +128,8 @@ func (q *Queries) GetNodeById(ctx context.Context, id string) (Node, error) {
 		&i.LastHeartbeat,
 		&i.AgentVersion,
 		&i.ContainerdSock,
+		&i.TokenHash,
+		&i.TokenExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -133,7 +137,7 @@ func (q *Queries) GetNodeById(ctx context.Context, id string) (Node, error) {
 }
 
 const getNodeByName = `-- name: GetNodeByName :one
-SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, created_at, updated_at FROM nodes WHERE name = $1
+SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at FROM nodes WHERE name = $1
 `
 
 func (q *Queries) GetNodeByName(ctx context.Context, name string) (Node, error) {
@@ -150,6 +154,37 @@ func (q *Queries) GetNodeByName(ctx context.Context, name string) (Node, error) 
 		&i.LastHeartbeat,
 		&i.AgentVersion,
 		&i.ContainerdSock,
+		&i.TokenHash,
+		&i.TokenExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getNodeByTokenHash = `-- name: GetNodeByTokenHash :one
+SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at FROM nodes
+WHERE token_hash = $1
+  AND token_expires_at IS NOT NULL
+  AND token_expires_at > now()
+`
+
+func (q *Queries) GetNodeByTokenHash(ctx context.Context, tokenHash pgtype.Text) (Node, error) {
+	row := q.db.QueryRow(ctx, getNodeByTokenHash, tokenHash)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PublicIp,
+		&i.PrivateIp,
+		&i.OverlayIp,
+		&i.OverlaySubnet,
+		&i.Status,
+		&i.LastHeartbeat,
+		&i.AgentVersion,
+		&i.ContainerdSock,
+		&i.TokenHash,
+		&i.TokenExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -189,7 +224,7 @@ func (q *Queries) ListJoinTokens(ctx context.Context) ([]NodeJoinToken, error) {
 }
 
 const listNodes = `-- name: ListNodes :many
-SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, created_at, updated_at FROM nodes ORDER BY created_at DESC
+SELECT id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at FROM nodes ORDER BY created_at DESC
 `
 
 func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
@@ -212,6 +247,8 @@ func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
 			&i.LastHeartbeat,
 			&i.AgentVersion,
 			&i.ContainerdSock,
+			&i.TokenHash,
+			&i.TokenExpiresAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -248,4 +285,39 @@ UPDATE nodes SET last_heartbeat = now(), updated_at = now() WHERE id = $1
 func (q *Queries) UpdateNodeHeartbeat(ctx context.Context, id string) error {
 	_, err := q.db.Exec(ctx, updateNodeHeartbeat, id)
 	return err
+}
+
+const updateNodeToken = `-- name: UpdateNodeToken :one
+UPDATE nodes
+SET token_hash = $2, token_expires_at = $3, updated_at = now()
+WHERE id = $1
+RETURNING id, name, public_ip, private_ip, overlay_ip, overlay_subnet, status, last_heartbeat, agent_version, containerd_sock, token_hash, token_expires_at, created_at, updated_at
+`
+
+type UpdateNodeTokenParams struct {
+	ID             string
+	TokenHash      pgtype.Text
+	TokenExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateNodeToken(ctx context.Context, arg UpdateNodeTokenParams) (Node, error) {
+	row := q.db.QueryRow(ctx, updateNodeToken, arg.ID, arg.TokenHash, arg.TokenExpiresAt)
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PublicIp,
+		&i.PrivateIp,
+		&i.OverlayIp,
+		&i.OverlaySubnet,
+		&i.Status,
+		&i.LastHeartbeat,
+		&i.AgentVersion,
+		&i.ContainerdSock,
+		&i.TokenHash,
+		&i.TokenExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

@@ -208,6 +208,8 @@ type Node struct {
 	LastHeartbeat  pgtype.Timestamptz
 	AgentVersion   pgtype.Text
 	ContainerdSock string
+	TokenHash      pgtype.Text
+	TokenExpiresAt pgtype.Timestamptz
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 }

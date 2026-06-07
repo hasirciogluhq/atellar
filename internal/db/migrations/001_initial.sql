@@ -34,6 +34,8 @@ CREATE TABLE nodes (
     agent_version TEXT DEFAULT NULL,
     -- containerd socket path (default /run/containerd/containerd.sock)
     containerd_sock TEXT NOT NULL DEFAULT '/run/containerd/containerd.sock',
+    token_hash TEXT DEFAULT NULL,
+    token_expires_at TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

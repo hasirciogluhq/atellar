@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/hasirciogluhq/atellar/cmd/api/shared"
 	"github.com/hasirciogluhq/atellar/internal/config"
 	db_generated "github.com/hasirciogluhq/atellar/internal/db/generated"
+	grpcserver "github.com/hasirciogluhq/atellar/internal/grpc/server"
 	"github.com/hasirciogluhq/migrator"
 )
 
@@ -71,12 +73,20 @@ func main() {
 
 	infra := shared.LoadInfrastructure(database)
 
+	go func() {
+		log.Printf("grpc server listening on :%s", config.GRPCPort)
+		if err := grpcserver.ListenAndServe(config.GRPCPort, infra); err != nil {
+			panic(err)
+		}
+	}()
+
 	router := gin.Default()
 	router.Use(gin.Recovery())
 	router.Use(gin.Logger())
 
 	http_routes.RegisterRoutes(router.Group("/api"), infra)
 
+	log.Printf("http server listening on :%s", config.Port)
 	err := http.ListenAndServe(":"+config.Port, router)
 	if err != nil {
 		panic(err)

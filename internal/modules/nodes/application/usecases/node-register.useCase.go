@@ -27,7 +27,7 @@ func NewNodeRegisterUseCase(nodeRepository ports.NodeRepositoryInterface) *NodeR
 	return &NodeRegisterUseCase{nodeRepository: nodeRepository}
 }
 
-func (u *NodeRegisterUseCase) Execute(ctx context.Context, input RegisterNodeInput) (*node.NodeEntity, error) {
+func (u *NodeRegisterUseCase) Execute(ctx context.Context, input RegisterNodeInput) (*node.RegisterNodeResult, error) {
 	if input.Token == "" {
 		return nil, errors.New("join token is required")
 	}
@@ -68,5 +68,14 @@ func (u *NodeRegisterUseCase) Execute(ctx context.Context, input RegisterNodeInp
 		return nil, err
 	}
 
-	return createdNode, nil
+	apiKey, err := u.nodeRepository.IssueNodeAPIKey(ctx, createdNode.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &node.RegisterNodeResult{
+		Node:            *createdNode,
+		NodeAPIKey:      apiKey.NodeAPIKey,
+		APIKeyExpiresAt: apiKey.APIKeyExpiresAt,
+	}, nil
 }

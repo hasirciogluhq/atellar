@@ -10,6 +10,7 @@ import (
 	joinToken "github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/join-token"
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/node"
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
+	"github.com/hasirciogluhq/atellar/internal/pkg/nodetoken"
 	"github.com/hasirciogluhq/atellar/internal/pkg/pgutil"
 	"github.com/hasirciogluhq/atellar/internal/pkg/tokenhash"
 	"github.com/jackc/pgx/v5"
@@ -106,6 +107,55 @@ func (r *NodeRepository) CreateNode(ctx context.Context, input ports.CreateNodeI
 	}
 
 	return parseNode(row), nil
+}
+
+func (r *NodeRepository) IssueNodeAPIKey(ctx context.Context, nodeID string) (*node.NodeAPIKeyResult, error) {
+	issued, err := nodetoken.Issue()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = r.queries.UpdateNodeToken(ctx, db_generated.UpdateNodeTokenParams{
+		ID:             nodeID,
+		TokenHash:      pgutil.OptionalStringToText(tokenhash.Hash(issued.PlainToken)),
+		TokenExpiresAt: pgutil.TimeToTimestamptz(&issued.ExpiresAt),
+	})
+	if err != nil {
+		fmt.Println("Error issuing node api key: ", err)
+		return nil, err
+	}
+
+	return &node.NodeAPIKeyResult{
+		NodeAPIKey:      issued.PlainToken,
+		APIKeyExpiresAt: issued.ExpiresAt,
+	}, nil
+}
+
+func (r *NodeRepository) AuthenticateNodeByAPIKey(ctx context.Context, plainAPIKey string) (*node.NodeEntity, error) {
+	row, err := r.queries.GetNodeByTokenHash(ctx, pgutil.OptionalStringToText(tokenhash.Hash(plainAPIKey)))
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+
+		fmt.Println("Error authenticating node api key: ", err)
+		return nil, err
+	}
+
+	return parseNode(row), nil
+}
+
+func (r *NodeRepository) RenewNodeAPIKey(ctx context.Context, plainAPIKey string) (*node.NodeAPIKeyResult, error) {
+	authenticated, err := r.AuthenticateNodeByAPIKey(ctx, plainAPIKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if authenticated == nil {
+		return nil, fmt.Errorf("invalid node api key")
+	}
+
+	return r.IssueNodeAPIKey(ctx, authenticated.ID)
 }
 
 func (r *NodeRepository) CreateJoinToken(ctx context.Context, expiresAt *time.Time, singleUse bool) (*joinToken.JoinTokenCreateResult, error) {

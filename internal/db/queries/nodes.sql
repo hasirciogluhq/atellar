@@ -7,12 +7,24 @@ SELECT * FROM nodes WHERE id = $1;
 -- name: GetNodeByName :one
 SELECT * FROM nodes WHERE name = $1;
 
+-- name: GetNodeByTokenHash :one
+SELECT * FROM nodes
+WHERE token_hash = $1
+  AND token_expires_at IS NOT NULL
+  AND token_expires_at > now();
+
 -- name: ListNodes :many
 SELECT * FROM nodes ORDER BY created_at DESC;
 
 -- name: CreateNode :one
 INSERT INTO nodes (id, name, public_ip, private_ip, agent_version, containerd_sock, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING *;
+
+-- name: UpdateNodeToken :one
+UPDATE nodes
+SET token_hash = $2, token_expires_at = $3, updated_at = now()
+WHERE id = $1
 RETURNING *;
 
 -- name: CreateJoinToken :one

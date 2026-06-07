@@ -4,22 +4,41 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const (
-	DefaultFileName = "agent.json"
-	SystemConfigDir = "/etc/atellar"
+	DefaultFileName  = "agent.json"
+	SystemConfigDir  = "/etc/atellar"
 	SystemConfigPath = SystemConfigDir + "/" + DefaultFileName
+	DefaultGrpcPort  = "9090"
 )
 
 type Config struct {
-	ControlPlaneURL   string `json:"control_plane_url"`
-	NodeID            string `json:"node_id"`
-	NodeName          string `json:"node_name,omitempty"`
-	ContainerdSock    string `json:"containerd_sock,omitempty"`
-	HeartbeatInterval string `json:"heartbeat_interval,omitempty"`
+	ControlPlaneURL   string    `json:"control_plane_url"`
+	GrpcAddr          string    `json:"grpc_addr,omitempty"`
+	NodeID            string    `json:"node_id"`
+	NodeName          string    `json:"node_name,omitempty"`
+	NodeAPIKey        string    `json:"node_api_key"`
+	APIKeyExpiresAt   time.Time `json:"api_key_expires_at"`
+	ContainerdSock    string    `json:"containerd_sock,omitempty"`
+	HeartbeatInterval string    `json:"heartbeat_interval,omitempty"`
+}
+
+func (c *Config) ResolveGrpcAddr() string {
+	if c.GrpcAddr != "" {
+		return c.GrpcAddr
+	}
+
+	parsed, err := url.Parse(c.ControlPlaneURL)
+	if err != nil || parsed.Host == "" {
+		return "localhost:" + DefaultGrpcPort
+	}
+
+	return parsed.Hostname() + ":" + DefaultGrpcPort
 }
 
 func Load(path string) (*Config, error) {
@@ -37,12 +56,33 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	var legacy struct {
+		NodeToken      string    `json:"node_token"`
+		TokenExpiresAt time.Time `json:"token_expires_at"`
+	}
+	if err := json.Unmarshal(data, &legacy); err == nil {
+		if cfg.NodeAPIKey == "" && legacy.NodeToken != "" {
+			cfg.NodeAPIKey = legacy.NodeToken
+		}
+		if cfg.APIKeyExpiresAt.IsZero() && !legacy.TokenExpiresAt.IsZero() {
+			cfg.APIKeyExpiresAt = legacy.TokenExpiresAt
+		}
+	}
+
 	if cfg.ControlPlaneURL == "" {
 		return nil, errors.New("control_plane_url is required in config")
 	}
 
 	if cfg.NodeID == "" {
 		return nil, errors.New("node_id is required in config")
+	}
+
+	if cfg.NodeAPIKey == "" {
+		return nil, errors.New("node_api_key is required in config")
+	}
+
+	if cfg.APIKeyExpiresAt.IsZero() {
+		return nil, errors.New("api_key_expires_at is required in config")
 	}
 
 	if cfg.HeartbeatInterval == "" {
@@ -67,4 +107,16 @@ func Save(path string, cfg Config) error {
 	}
 
 	return os.WriteFile(path, data, 0o600)
+}
+
+func UpdateNodeAPIKey(path string, apiKey string, expiresAt time.Time) error {
+	cfg, err := Load(path)
+	if err != nil {
+		return err
+	}
+
+	cfg.NodeAPIKey = apiKey
+	cfg.APIKeyExpiresAt = expiresAt
+
+	return Save(path, *cfg)
 }

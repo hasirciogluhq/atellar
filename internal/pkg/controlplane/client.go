@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/node"
+	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
 )
 
 type Client struct {
@@ -35,7 +36,7 @@ type RegisterRequest struct {
 	ContainerdSock string `json:"containerd_sock,omitempty"`
 }
 
-func (c *Client) Register(ctx context.Context, joinToken string, req RegisterRequest) (*node.NodeEntity, error) {
+func (c *Client) Register(ctx context.Context, joinToken string, req RegisterRequest) (*node.RegisterNodeResult, error) {
 	endpoint := fmt.Sprintf("%s/api/v1/nodes/register?token=%s", c.baseURL, joinToken)
 
 	body, err := json.Marshal(req)
@@ -65,32 +66,43 @@ func (c *Client) Register(ctx context.Context, joinToken string, req RegisterReq
 		return nil, fmt.Errorf("register failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
 
-	var registeredNode node.NodeEntity
-	if err := json.Unmarshal(respBody, &registeredNode); err != nil {
+	var result node.RegisterNodeResult
+	if err := json.Unmarshal(respBody, &result); err != nil {
 		return nil, err
 	}
 
-	return &registeredNode, nil
+	return &result, nil
 }
 
-func (c *Client) SendHeartbeat(ctx context.Context, nodeID string) error {
-	endpoint := fmt.Sprintf("%s/api/v1/nodes/%s/heartbeat", c.baseURL, nodeID)
+func (c *Client) RenewNodeAPIKey(ctx context.Context, apiKey string) (*node.NodeAPIKeyResult, error) {
+	endpoint := fmt.Sprintf("%s/api/v1/nodes/me/api-key/renew", c.baseURL)
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	httpReq.Header.Set("Authorization", authn.SchemeBearer+" "+apiKey)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= http.StatusBadRequest {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("heartbeat failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("renew api key failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	var result node.NodeAPIKeyResult
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }

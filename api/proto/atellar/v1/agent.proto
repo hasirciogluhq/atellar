@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package atellar.v1;
+
+option go_package = "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1;atellarv1";
+
+service AgentService {
+  rpc Connect(stream AgentEnvelope) returns (stream ServerEnvelope);
+  rpc RenewNodeAPIKey(RenewNodeAPIKeyRequest) returns (RenewNodeAPIKeyResponse);
+}
+
+enum DeliveryMode {
+  DELIVERY_MODE_UNSPECIFIED = 0;
+  DELIVERY_MODE_SYNC = 1;
+  DELIVERY_MODE_ASYNC = 2;
+}
+
+message AgentEnvelope {
+  string correlation_id = 1;
+  oneof payload {
+    Heartbeat heartbeat = 2;
+    Ingest ingest = 3;
+    RpcResult rpc_result = 4;
+  }
+}
+
+message ServerEnvelope {
+  string correlation_id = 1;
+  oneof payload {
+    HeartbeatAck heartbeat_ack = 2;
+    RpcCall rpc_call = 3;
+    IngestAck ingest_ack = 4;
+  }
+}
+
+message Heartbeat {
+  int64 timestamp_unix = 1;
+}
+
+message HeartbeatAck {
+  int64 timestamp_unix = 1;
+}
+
+message Ingest {
+  string event_type = 1;
+  bytes payload = 2;
+}
+
+message IngestAck {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message RpcCall {
+  string method = 1;
+  bytes payload = 2;
+  DeliveryMode mode = 3;
+}
+
+message RpcResult {
+  bytes payload = 1;
+  string error = 2;
+}
+
+message RenewNodeAPIKeyRequest {}
+
+message RenewNodeAPIKeyResponse {
+  string node_api_key = 1;
+  int64 expires_at_unix = 2;
+}

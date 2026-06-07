@@ -46,7 +46,7 @@ func Execute(ctx context.Context, opts Options) (*agentconfig.Config, error) {
 	}
 
 	client := controlplane.NewClient(controlPlaneURL)
-	registeredNode, err := client.Register(ctx, opts.Token, controlplane.RegisterRequest{
+	result, err := client.Register(ctx, opts.Token, controlplane.RegisterRequest{
 		Name:           opts.NodeName,
 		PublicIP:       opts.PublicIP,
 		PrivateIP:      opts.PrivateIP,
@@ -59,8 +59,10 @@ func Execute(ctx context.Context, opts Options) (*agentconfig.Config, error) {
 
 	cfg := agentconfig.Config{
 		ControlPlaneURL:   controlPlaneURL,
-		NodeID:            registeredNode.ID,
-		NodeName:          registeredNode.Name,
+		NodeID:            result.Node.ID,
+		NodeName:          result.Node.Name,
+		NodeAPIKey:        result.NodeAPIKey,
+		APIKeyExpiresAt:   result.APIKeyExpiresAt,
 		ContainerdSock:    containerdSock,
 		HeartbeatInterval: heartbeatInterval,
 	}
