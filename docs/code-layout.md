@@ -36,8 +36,8 @@ internal/
 │       ├── link_linux.go     # ip route/link (linux)
 │       └── link_stub.go      # dev/macOS stub
 
-├── client/                   # outbound HTTP clients (CLI, plugins — NOT agent)
-│   └── controlplane/
+pkg/
+  client/                     # global HTTP API client (atelctl, plugins)
 
 ├── platform/                 # shared primitives (authn, pgutil, hashes)
 │   ├── authn/
@@ -60,7 +60,7 @@ internal/
 | `agent/overlay` | stdlib only | `modules/*`, `client/*` |
 | `agent/grpcclient` | `agent/config`, `agent/overlay`, `platform/authn`, `grpc/gen` | `modules/*` |
 | `grpc/server` | `modules/*`, `platform/*`, `grpc/agentregistry` | `agent/*` |
-| `client/controlplane` | `modules/domain` (DTOs for JSON) | `agent/*` |
+| `pkg/client` | stdlib, jwt | `internal/*` domain (uses own DTOs) |
 
 ## What was removed
 
@@ -74,7 +74,7 @@ internal/
 |-----------|-----------|
 | `agent/grpcclient` | gRPC only |
 | `agent/overlay` | local `ip` commands (linux) |
-| `client/controlplane` | HTTP (atelctl, external plugins) |
+| `pkg/client` | HTTP (atelctl, external plugins) |
 | `cmd/api` routes | HTTP REST |
 
 ## Future (when adding vmnet / container netns)

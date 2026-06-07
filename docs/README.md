@@ -27,6 +27,6 @@ internal/
   agent/               config, grpcclient, overlay
   cluster/ipam/        control plane overlay IPAM
   platform/            authn, pgutil, tokenhash
-  client/controlplane/ HTTP client for CLI/plugins
+pkg/client/          Global HTTP API client
 api/proto/             Protobuf definitions
 ```

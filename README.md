@@ -14,8 +14,9 @@ curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
   -H "Content-Type: application/json" \
   -d '{"single_use": true}'
 
-# 3. Initialize node agent
-sudo go run ./cmd/atelctl agent init --token <PLAIN_TOKEN> --name node-1
+# 3. Prepare node + join cluster
+sudo go run ./cmd/atelctl agent init
+sudo go run ./cmd/atelctl agent join --token <PLAIN_TOKEN> --name node-1
 
 # 4. Install and start agent
 sudo go run ./cmd/atelctl agent install --agent-bin ./atellar-agent
@@ -26,7 +27,7 @@ sudo go run ./cmd/atelctl agent install --agent-bin ./atellar-agent
 | Component | Binary | Role |
 |-----------|--------|------|
 | **API Server** | `cmd/api` | HTTP `:8080` + gRPC `:9090`, node/container management, overlay IPAM |
-| **atelctl** | `cmd/atelctl` | `agent init/install`, `cluster nodes/containers list` |
+| **atelctl** | `cmd/atelctl` | `agent init/join/install`, `cluster nodes/containers list` |
 | **Agent** | `cmd/agent` | gRPC-only: config, stream, heartbeat, overlay reconcile |
 
 ## Architecture (overview)

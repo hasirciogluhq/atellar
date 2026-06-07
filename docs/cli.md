@@ -6,58 +6,55 @@ Operator tool for **cluster** (control plane) and **agent** (node) operations.
 
 ```
 atelctl
-├── agent                 # local node agent
-│   ├── init              # register node + write config
+├── agent
+│   ├── init              # prepare node locally (dirs, containerd check)
+│   ├── join              # register with control plane + write config
 │   ├── install           # systemd install
-│   └── renew-key         # renew node API key
-└── cluster               # control plane
+│   └── renew-key
+└── cluster
     ├── nodes list
     └── containers list
 ```
 
-## Agent commands
+HTTP calls go through `pkg/client.AtellarClient`.
+
+## Agent flow
+
+```
+atelctl agent init → atelctl agent join → atelctl agent install
+```
 
 ### `agent init`
 
-Registers the machine with the control plane and writes `/etc/atellar/agent.json`.
+Prepares the node — no control plane call.
 
 ```bash
-atelctl agent init \
-  --token <JOIN_TOKEN> \
-  --control-plane-url http://localhost:8080 \
-  --name node-1 \
-  --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5 \
+sudo atelctl agent init \
   --containerd-sock /run/containerd/containerd.sock \
-  --heartbeat-interval 5s \
-  --config /etc/atellar/agent.json
+  --config-dir /etc/atellar \
+  --log-dir /var/log/atellar
 ```
 
-| Flag | Required | Default |
-|------|----------|---------|
-| `--token` | yes | — |
-| `--control-plane-url` | no | `http://localhost:8080` |
-| `--name` | no | — |
-| `--public-ip` | no | — |
-| `--private-ip` | no | — |
-| `--containerd-sock` | no | `/run/containerd/containerd.sock` |
-| `--heartbeat-interval` | no | `5s` |
-| `--config` | no | `/etc/atellar/agent.json` |
+Creates config/log directories and verifies containerd socket.
+
+### `agent join`
+
+Registers with the control plane and writes `/etc/atellar/agent.json`.
+
+```bash
+atelctl agent join \
+  --token <JOIN_TOKEN> \
+  --control-plane-url http://localhost:8080 \
+  --name node-1
+```
 
 ### `agent install`
 
-Installs the agent binary and creates a systemd unit.
-
 ```bash
-sudo atelctl agent install \
-  --agent-bin ./atellar-agent \
-  --target /usr/local/bin/atellar-agent \
-  --config /etc/atellar/agent.json
+sudo atelctl agent install --agent-bin ./atellar-agent
 ```
 
 ### `agent renew-key`
-
-Renews the node API key (reads from config by default).
 
 ```bash
 atelctl agent renew-key --config /etc/atellar/agent.json
@@ -65,32 +62,19 @@ atelctl agent renew-key --config /etc/atellar/agent.json
 
 ## Cluster commands
 
-All cluster commands accept `--control-plane-url` (default `http://localhost:8080`).
-
-### `cluster nodes list`
-
 ```bash
 atelctl cluster nodes list
-```
-
-### `cluster containers list`
-
-```bash
-atelctl cluster containers list
 atelctl cluster containers list --node-id <NODE_ID>
 ```
 
-## Typical flow
+## pkg/client
 
+Global HTTP API client used by atelctl and external tools:
+
+```go
+api := client.New(client.Options{BaseURL: "http://localhost:8080"})
+api.RegisterNode(ctx, joinToken, client.RegisterNodeRequest{...})
+api.ListNodes(ctx)
 ```
-atelctl agent init → atelctl agent install → agent runs via systemd
-```
 
-The agent renews its API key automatically; use `agent renew-key` manually if needed.
-
-## Related code
-
-- `cmd/atelctl/` — cobra commands
-- `internal/atelctl/agent/` — init, install, renew-key
-- `internal/atelctl/cluster/` — nodes/containers list
-- `internal/client/controlplane/` — HTTP client to control plane
+Service account auth: `ATELLAR_SERVICE_ACCOUNT_SECRET` / `ATELLAR_SERVICE_ACCOUNT_TOKEN` or `/var/run/secrets/atellar/service-account/secret`.

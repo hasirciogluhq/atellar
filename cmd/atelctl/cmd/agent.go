@@ -15,14 +15,18 @@ var agentCmd = &cobra.Command{
 }
 
 var (
-	agentInitToken             string
-	agentInitControlPlaneURL   string
-	agentInitNodeName          string
-	agentInitPublicIP          string
-	agentInitPrivateIP         string
-	agentInitContainerdSock    string
-	agentInitHeartbeatInterval string
-	agentInitConfigPath        string
+	agentInitContainerdSock string
+	agentInitConfigDir      string
+	agentInitLogDir         string
+
+	agentJoinToken             string
+	agentJoinControlPlaneURL   string
+	agentJoinNodeName          string
+	agentJoinPublicIP          string
+	agentJoinPrivateIP         string
+	agentJoinContainerdSock    string
+	agentJoinHeartbeatInterval string
+	agentJoinConfigPath        string
 
 	agentInstallBinSource string
 	agentInstallBinTarget string
@@ -36,28 +40,50 @@ var (
 
 var agentInitCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Register this node and write agent config",
+	Short: "Prepare this node for the cluster (dirs, prerequisites)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := agent.Init(context.Background(), agent.InitOptions{
-			Token:             agentInitToken,
-			ControlPlaneURL:   agentInitControlPlaneURL,
-			NodeName:          agentInitNodeName,
-			PublicIP:          agentInitPublicIP,
-			PrivateIP:         agentInitPrivateIP,
-			ContainerdSock:    agentInitContainerdSock,
-			HeartbeatInterval: agentInitHeartbeatInterval,
-			ConfigPath:        agentInitConfigPath,
+		result, err := agent.Init(agent.InitOptions{
+			ContainerdSock: agentInitContainerdSock,
+			ConfigDir:      agentInitConfigDir,
+			LogDir:         agentInitLogDir,
 		})
 		if err != nil {
 			return err
 		}
 
-		configPath := agentInitConfigPath
+		fmt.Printf("node prepared\n")
+		fmt.Printf("  config_dir:      %s\n", result.ConfigDir)
+		fmt.Printf("  log_dir:         %s\n", result.LogDir)
+		fmt.Printf("  containerd_sock: %s\n", result.ContainerdSock)
+		fmt.Printf("\nnext: atelctl agent join --token <JOIN_TOKEN> --name <NODE_NAME>\n")
+		return nil
+	},
+}
+
+var agentJoinCmd = &cobra.Command{
+	Use:   "join",
+	Short: "Join this node to the control plane",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := agent.Join(context.Background(), agent.JoinOptions{
+			Token:             agentJoinToken,
+			ControlPlaneURL:   agentJoinControlPlaneURL,
+			NodeName:          agentJoinNodeName,
+			PublicIP:          agentJoinPublicIP,
+			PrivateIP:         agentJoinPrivateIP,
+			ContainerdSock:    agentJoinContainerdSock,
+			HeartbeatInterval: agentJoinHeartbeatInterval,
+			ConfigPath:        agentJoinConfigPath,
+		})
+		if err != nil {
+			return err
+		}
+
+		configPath := agentJoinConfigPath
 		if configPath == "" {
 			configPath = config.SystemConfigPath
 		}
 
-		fmt.Printf("agent initialized\n")
+		fmt.Printf("node joined\n")
 		fmt.Printf("  node_id: %s\n", cfg.NodeID)
 		fmt.Printf("  config:  %s\n", configPath)
 		fmt.Printf("\nnext: sudo atelctl agent install --agent-bin <path-to-atellar-agent>\n")
@@ -111,15 +137,19 @@ var agentRenewKeyCmd = &cobra.Command{
 }
 
 func init() {
-	agentInitCmd.Flags().StringVar(&agentInitToken, "token", "", "join token from control plane (required)")
-	agentInitCmd.Flags().StringVar(&agentInitControlPlaneURL, "control-plane-url", "http://localhost:8080", "control plane base URL")
-	agentInitCmd.Flags().StringVar(&agentInitNodeName, "name", "", "node name")
-	agentInitCmd.Flags().StringVar(&agentInitPublicIP, "public-ip", "", "node public IP")
-	agentInitCmd.Flags().StringVar(&agentInitPrivateIP, "private-ip", "", "node private IP")
-	agentInitCmd.Flags().StringVar(&agentInitContainerdSock, "containerd-sock", "/run/containerd/containerd.sock", "containerd socket path")
-	agentInitCmd.Flags().StringVar(&agentInitHeartbeatInterval, "heartbeat-interval", "5s", "agent heartbeat interval")
-	agentInitCmd.Flags().StringVar(&agentInitConfigPath, "config", config.SystemConfigPath, "agent config output path")
-	_ = agentInitCmd.MarkFlagRequired("token")
+	agentInitCmd.Flags().StringVar(&agentInitContainerdSock, "containerd-sock", "/run/containerd/containerd.sock", "containerd socket to verify")
+	agentInitCmd.Flags().StringVar(&agentInitConfigDir, "config-dir", config.SystemConfigDir, "agent config directory")
+	agentInitCmd.Flags().StringVar(&agentInitLogDir, "log-dir", agent.LogDir, "agent log directory")
+
+	agentJoinCmd.Flags().StringVar(&agentJoinToken, "token", "", "join token from control plane (required)")
+	agentJoinCmd.Flags().StringVar(&agentJoinControlPlaneURL, "control-plane-url", "http://localhost:8080", "control plane base URL")
+	agentJoinCmd.Flags().StringVar(&agentJoinNodeName, "name", "", "node name")
+	agentJoinCmd.Flags().StringVar(&agentJoinPublicIP, "public-ip", "", "node public IP")
+	agentJoinCmd.Flags().StringVar(&agentJoinPrivateIP, "private-ip", "", "node private IP")
+	agentJoinCmd.Flags().StringVar(&agentJoinContainerdSock, "containerd-sock", "/run/containerd/containerd.sock", "containerd socket path")
+	agentJoinCmd.Flags().StringVar(&agentJoinHeartbeatInterval, "heartbeat-interval", "5s", "agent heartbeat interval")
+	agentJoinCmd.Flags().StringVar(&agentJoinConfigPath, "config", config.SystemConfigPath, "agent config output path")
+	_ = agentJoinCmd.MarkFlagRequired("token")
 
 	agentInstallCmd.Flags().StringVar(&agentInstallBinSource, "agent-bin", "", "path to atellar-agent binary (required)")
 	agentInstallCmd.Flags().StringVar(&agentInstallBinTarget, "target", agent.DefaultAgentBinPath, "install destination")
@@ -131,6 +161,6 @@ func init() {
 	agentRenewKeyCmd.Flags().StringVar(&agentRenewConfigPath, "config", config.SystemConfigPath, "agent config path")
 	agentRenewKeyCmd.Flags().BoolVar(&agentRenewUpdateConfig, "update-config", true, "write renewed key to config")
 
-	agentCmd.AddCommand(agentInitCmd, agentInstallCmd, agentRenewKeyCmd)
+	agentCmd.AddCommand(agentInitCmd, agentJoinCmd, agentInstallCmd, agentRenewKeyCmd)
 	rootCmd.AddCommand(agentCmd)
 }

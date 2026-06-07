@@ -12,7 +12,8 @@ var rootCmd = &cobra.Command{
 	Long: `atelctl talks to the control plane (cluster) and configures local node agents.
 
 Examples:
-  atelctl agent init --token <TOKEN> --name node-1
+  atelctl agent init
+  atelctl agent join --token <TOKEN> --name node-1
   atelctl agent install --agent-bin ./atellar-agent
   atelctl cluster nodes list`,
 }

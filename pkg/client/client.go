@@ -1,88 +1,183 @@
 package client
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	defaultTimeout     = 15 * time.Second
+	apiPrefix          = "/api/v1"
+	bearerPrefix       = "Bearer "
+	serviceSecretPath  = "/var/run/secrets/atellar/service-account/secret"
+	envServiceSecret   = "ATELLAR_SERVICE_ACCOUNT_SECRET"
+	envServiceToken    = "ATELLAR_SERVICE_ACCOUNT_TOKEN"
+)
+
 type AtellarClient struct {
-	Token  *string `json:"token,omitempty"`
-	Secret *string `json:"secret,omitempty"`
+	BaseURL    string
+	Token      *string
+	Secret     *string
+	httpClient *http.Client
 }
 
-type AtellarClientCreationOptions struct {
-	Token  *string `json:"token,omitempty"`
-	Secret *string `json:"secret,omitempty"`
+type Options struct {
+	BaseURL string
+	Token   *string
+	Secret  *string
 }
 
-func NewAtellarClient(opts AtellarClientCreationOptions) AtellarClient {
+func New(opts Options) *AtellarClient {
 	resolvedToken := opts.Token
 	resolvedSecret := opts.Secret
 
 	if resolvedSecret == nil {
-		osSecret, err := os.ReadFile("/var/run/secrets/atellar/service-account/secret")
-		if err == nil {
-			secret := string(osSecret)
+		if data, err := os.ReadFile(serviceSecretPath); err == nil {
+			secret := strings.TrimSpace(string(data))
 			resolvedSecret = &secret
-		} else {
-			envSecret := os.Getenv("ATELLAR_SERVICE_ACCOUNT_SECRET")
-			if envSecret != "" {
-				resolvedSecret = &envSecret
-			}
+		} else if envSecret := os.Getenv(envServiceSecret); envSecret != "" {
+			resolvedSecret = &envSecret
 		}
 	}
 
 	if resolvedToken == nil {
-		envToken := os.Getenv("ATELLAR_SERVICE_ACCOUNT_TOKEN")
-		if envToken != "" {
+		if envToken := os.Getenv(envServiceToken); envToken != "" {
 			resolvedToken = &envToken
 		}
 	}
 
-	return AtellarClient{
-		Token:  resolvedToken,
-		Secret: resolvedSecret,
+	return &AtellarClient{
+		BaseURL: strings.TrimRight(opts.BaseURL, "/"),
+		Token:   resolvedToken,
+		Secret:  resolvedSecret,
+		httpClient: &http.Client{
+			Timeout: defaultTimeout,
+		},
 	}
 }
 
-func (c *AtellarClient) EnsureToken() error {
-	if c.Token != nil {
-		token, err := jwt.Parse(*c.Token, func(*jwt.Token) (any, error) {
-			return *c.Secret, nil
-		})
+// NewAtellarClient keeps the original constructor name.
+func NewAtellarClient(opts Options) *AtellarClient {
+	return New(opts)
+}
 
-		if err != nil {
-			t, err := token.Claims.GetExpirationTime()
-			if err != nil {
-				// if there is error. It must be undefined expiration date, su we force to use expiration
-				c.Token = nil
-			} else if t.Before(time.Now().Add(time.Second * 3)) {
-				c.Token = nil
+func (c *AtellarClient) WithBaseURL(baseURL string) *AtellarClient {
+	clone := *c
+	clone.BaseURL = strings.TrimRight(baseURL, "/")
+	return &clone
+}
+
+func (c *AtellarClient) WithBearer(token string) *AtellarClient {
+	clone := *c
+	t := token
+	clone.Token = &t
+	return &clone
+}
+
+func (c *AtellarClient) EnsureToken() error {
+	if c.Token != nil && *c.Token != "" {
+		parsed, err := jwt.Parse(*c.Token, func(*jwt.Token) (any, error) {
+			if c.Secret == nil {
+				return nil, errors.New("secret required to validate token")
+			}
+			return []byte(*c.Secret), nil
+		})
+		if err == nil && parsed.Valid {
+			if exp, err := parsed.Claims.GetExpirationTime(); err == nil {
+				if exp.After(time.Now().Add(3 * time.Second)) {
+					return nil
+				}
 			} else {
-				c.Token = &token.Raw
+				return nil
 			}
 		}
-
-		if c.Token != nil {
-			return nil
-		}
+		c.Token = nil
 	}
 
 	if c.Secret == nil {
-		return errors.New("Secret required for token generation")
+		return errors.New("secret required for token generation")
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{})
+	claims := jwt.MapClaims{
+		"exp": time.Now().Add(time.Hour).Unix(),
+		"iat": time.Now().Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	signed, err := jwt.SigningMethodHS256.Sign(*c.Secret, token.Raw)
+	signed, err := token.SignedString([]byte(*c.Secret))
 	if err != nil {
 		return err
 	}
 
-	signedString := string(signed)
-	c.Token = &signedString
+	c.Token = &signed
 	return nil
+}
+
+func (c *AtellarClient) Do(ctx context.Context, method, path string, query url.Values, body any, out any) error {
+	if c.BaseURL == "" {
+		return errors.New("base url is required")
+	}
+
+	var bodyReader io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		bodyReader = bytes.NewReader(encoded)
+	}
+
+	endpoint := c.BaseURL + path
+	if len(query) > 0 {
+		endpoint += "?" + query.Encode()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, bodyReader)
+	if err != nil {
+		return err
+	}
+
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	if c.Token != nil && *c.Token != "" {
+		req.Header.Set("Authorization", bearerPrefix+*c.Token)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		return fmt.Errorf("%s %s failed (%d): %s", method, path, resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	if out == nil || len(respBody) == 0 {
+		return nil
+	}
+
+	return json.Unmarshal(respBody, out)
+}
+
+func (c *AtellarClient) DoJSON(ctx context.Context, method, path string, body any, out any) error {
+	return c.Do(ctx, method, path, nil, body, out)
 }

@@ -28,12 +28,16 @@ curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
 
 Save the `token` value from the response — it is shown only once.
 
-## 3. Initialize node agent (atelctl)
+## 3. Prepare and join node (atelctl)
 
 On the worker machine:
 
 ```bash
-sudo go run ./cmd/atelctl agent init \
+# prepare dirs + verify containerd
+sudo go run ./cmd/atelctl agent init
+
+# register with control plane
+sudo go run ./cmd/atelctl agent join \
   --token <PLAIN_TOKEN> \
   --control-plane-url http://<cp-host>:8080 \
   --name node-1 \
@@ -41,11 +45,7 @@ sudo go run ./cmd/atelctl agent init \
   --private-ip 10.0.0.5
 ```
 
-This command:
-1. Calls `POST /api/v1/nodes/register`
-2. Assigns overlay subnet/IP
-3. Issues a node API key
-4. Writes `/etc/atellar/agent.json`
+`join` calls `POST /api/v1/nodes/register`, assigns overlay subnet/IP, issues a node API key, and writes `/etc/atellar/agent.json`.
 
 ## 4. Install agent
 
