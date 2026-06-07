@@ -25,29 +25,29 @@ func Run() error {
 		return fmt.Errorf("invalid heartbeat_interval in config: %w", err)
 	}
 
+	session, err := agentclient.NewSession(cfg, agentconfig.SystemConfigPath, nil)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
 	netManager, err := overlaynet.NewManager(overlaynet.ManagerConfig{
 		NodeID:            cfg.NodeID,
 		BridgeName:        cfg.ResolveBridgeName(),
 		OverlayIP:         cfg.OverlayIP,
 		OverlaySubnet:     cfg.OverlaySubnet,
-		ControlPlaneURL:   cfg.ControlPlaneURL,
-		NodeAPIKey:        cfg.NodeAPIKey,
 		ReconcileInterval: cfg.ResolveReconcileInterval(),
-	})
+	}, session)
 	if err != nil {
 		return fmt.Errorf("overlay network manager: %w", err)
 	}
+
+	session.SetNetworkReconciler(netManager)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	go netManager.Run(ctx)
-
-	session, err := agentclient.NewSession(cfg, agentconfig.SystemConfigPath, netManager)
-	if err != nil {
-		return err
-	}
-	defer session.Close()
 
 	log.Printf("atellar agent started node_id=%s grpc=%s bridge=%s config=%s",
 		cfg.NodeID, cfg.ResolveGrpcAddr(), cfg.ResolveBridgeName(), agentconfig.SystemConfigPath)

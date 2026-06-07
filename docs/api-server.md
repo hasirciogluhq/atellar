@@ -65,6 +65,7 @@ Service: `AgentService`
 |-----|------|-------------|
 | `Connect` | bidi stream | Agent connection, heartbeat, peer push |
 | `RenewNodeAPIKey` | unary | API key renewal |
+| `GetClusterNetworkState` | unary | Cluster nodes/containers for overlay reconcile |
 
 On connect, the agent is registered in `AgentRegistry`; on disconnect, unregistered.
 

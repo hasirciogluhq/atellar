@@ -51,6 +51,10 @@ func (s *Session) Close() error {
 	return s.conn.Close()
 }
 
+func (s *Session) SetNetworkReconciler(network networkReconciler) {
+	s.network = network
+}
+
 func (s *Session) Run(ctx context.Context, heartbeatEvery time.Duration) error {
 	streamCtx := authn.OutgoingContext(ctx, authn.Credential{
 		Type:  authn.CredentialTypeNodeAPIKey,

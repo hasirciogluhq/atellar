@@ -7,6 +7,7 @@ option go_package = "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/
 service AgentService {
   rpc Connect(stream AgentEnvelope) returns (stream ServerEnvelope);
   rpc RenewNodeAPIKey(RenewNodeAPIKeyRequest) returns (RenewNodeAPIKeyResponse);
+  rpc GetClusterNetworkState(GetClusterNetworkStateRequest) returns (GetClusterNetworkStateResponse);
 }
 
 enum DeliveryMode {
@@ -67,4 +68,25 @@ message RenewNodeAPIKeyRequest {}
 message RenewNodeAPIKeyResponse {
   string node_api_key = 1;
   int64 expires_at_unix = 2;
+}
+
+message GetClusterNetworkStateRequest {}
+
+message ClusterNode {
+  string id = 1;
+  string overlay_ip = 2;
+  string overlay_subnet = 3;
+  string status = 4;
+}
+
+message ClusterContainer {
+  string id = 1;
+  string node_id = 2;
+  string overlay_ip = 3;
+  string status = 4;
+}
+
+message GetClusterNetworkStateResponse {
+  repeated ClusterNode nodes = 1;
+  repeated ClusterContainer containers = 2;
 }

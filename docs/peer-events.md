@@ -90,7 +90,7 @@ On evict, `node.removed` is sent immediately (overlay still valid; peers remove 
 
 `internal/grpc/agentclient/session.go` forwards `reconcile.trigger` events to the overlaynet manager.
 
-Details: [agent.md](agent.md)
+Details: [agent.md](agent.md). Cluster sync uses gRPC `GetClusterNetworkState`, not HTTP.
 
 ## Related code
 

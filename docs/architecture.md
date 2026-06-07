@@ -37,6 +37,7 @@ Atellar consists of two layers:
 - gRPC `Connect` stream (heartbeat, RPC receive)
 - Automatic API key renewal (7 days before expiry)
 - Apply peer events and reconcile overlay bridge/routes (Linux: `ip` commands)
+- Communicate with control plane **only via gRPC** (no HTTP)
 
 ## Auth model
 

@@ -7,7 +7,8 @@ import (
 	"time"
 
 	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
-	"github.com/hasirciogluhq/atellar/internal/modules/nodes/application/usecases"
+	containerusecases "github.com/hasirciogluhq/atellar/internal/modules/containers/application/usecases"
+	nodeusecases "github.com/hasirciogluhq/atellar/internal/modules/nodes/application/usecases"
 	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -103,7 +104,7 @@ func (s *AgentService) RenewNodeAPIKey(ctx context.Context, _ *atellarv1.RenewNo
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
 
-	useCase := usecases.NewRenewNodeAPIKeyUseCase(s.deps.Nodes)
+	useCase := nodeusecases.NewRenewNodeAPIKeyUseCase(s.deps.Nodes)
 	result, err := useCase.Execute(ctx, credential.Value)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
@@ -113,4 +114,47 @@ func (s *AgentService) RenewNodeAPIKey(ctx context.Context, _ *atellarv1.RenewNo
 		NodeApiKey:    result.NodeAPIKey,
 		ExpiresAtUnix: result.APIKeyExpiresAt.Unix(),
 	}, nil
+}
+
+func (s *AgentService) GetClusterNetworkState(ctx context.Context, _ *atellarv1.GetClusterNetworkStateRequest) (*atellarv1.GetClusterNetworkStateResponse, error) {
+	if _, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth); err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+
+	listNodes := nodeusecases.NewListNodesUseCase(s.deps.Nodes)
+	nodes, err := listNodes.Execute(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list nodes: %v", err)
+	}
+
+	listContainers := containerusecases.NewListContainersUseCase(s.deps.Containers)
+	containers, err := listContainers.Execute(ctx, "")
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list containers: %v", err)
+	}
+
+	resp := &atellarv1.GetClusterNetworkStateResponse{
+		Nodes:      make([]*atellarv1.ClusterNode, 0, len(nodes)),
+		Containers: make([]*atellarv1.ClusterContainer, 0, len(containers)),
+	}
+
+	for _, item := range nodes {
+		resp.Nodes = append(resp.Nodes, &atellarv1.ClusterNode{
+			Id:            item.ID,
+			OverlayIp:     item.OverlayIP.String(),
+			OverlaySubnet: item.OverlaySubnet,
+			Status:        string(item.Status),
+		})
+	}
+
+	for _, item := range containers {
+		resp.Containers = append(resp.Containers, &atellarv1.ClusterContainer{
+			Id:        item.ID,
+			NodeId:    item.NodeID,
+			OverlayIp: item.OverlayIP.String(),
+			Status:    string(item.Status),
+		})
+	}
+
+	return resp, nil
 }

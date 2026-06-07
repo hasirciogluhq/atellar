@@ -7,8 +7,6 @@ import (
 	"net"
 	"sync"
 	"time"
-
-	"github.com/hasirciogluhq/atellar/internal/pkg/controlplane"
 )
 
 type ManagerConfig struct {
@@ -16,8 +14,6 @@ type ManagerConfig struct {
 	BridgeName        string
 	OverlayIP         string
 	OverlaySubnet     string
-	ControlPlaneURL   string
-	NodeAPIKey        string
 	ReconcileInterval time.Duration
 }
 
@@ -25,14 +21,18 @@ type Manager struct {
 	cfg       ManagerConfig
 	state     *desiredState
 	links     linkManager
-	client    *controlplane.Client
+	syncer    ClusterSyncer
 	triggerCh chan struct{}
 	reconcile sync.Mutex
 }
 
-func NewManager(cfg ManagerConfig) (*Manager, error) {
+func NewManager(cfg ManagerConfig, syncer ClusterSyncer) (*Manager, error) {
 	if cfg.NodeID == "" {
 		return nil, fmt.Errorf("node id is required")
+	}
+
+	if syncer == nil {
+		return nil, fmt.Errorf("cluster syncer is required")
 	}
 
 	if cfg.BridgeName == "" {
@@ -52,7 +52,7 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 		cfg:       cfg,
 		state:     newDesiredState(local),
 		links:     newLinkManager(),
-		client:    controlplane.NewClient(cfg.ControlPlaneURL),
+		syncer:    syncer,
 		triggerCh: make(chan struct{}, 1),
 	}, nil
 }
@@ -119,12 +119,7 @@ func (m *Manager) syncAndReconcile(ctx context.Context) {
 }
 
 func (m *Manager) syncFromControlPlane(ctx context.Context) error {
-	nodes, err := m.client.ListNodes(ctx)
-	if err != nil {
-		return err
-	}
-
-	containers, err := m.client.ListContainers(ctx, "")
+	nodes, containers, err := m.syncer.SyncClusterState(ctx)
 	if err != nil {
 		return err
 	}

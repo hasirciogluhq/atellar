@@ -75,4 +75,5 @@ The agent renews the API key automatically before expiry; use `renew-api-key` ma
 - `internal/cli/join/`
 - `internal/cli/install/`
 - `internal/cli/renew/`
-- `internal/pkg/controlplane/` — HTTP client
+- Agent: gRPC only (`internal/grpc/agentclient/`)
+- CLI/plugins: HTTP (`internal/pkg/controlplane/`)

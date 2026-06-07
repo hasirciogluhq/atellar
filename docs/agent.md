@@ -36,7 +36,7 @@ Path: `/etc/atellar/agent.json`
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `control_plane_url` | yes | HTTP API base |
+| `control_plane_url` | yes | Used by CLI/plugins to derive gRPC host; agent dials `grpc_addr` or host:9090 |
 | `node_id` | yes | Assigned after register |
 | `node_api_key` | yes | gRPC auth |
 | `api_key_expires_at` | yes | Renew threshold |
@@ -58,22 +58,19 @@ On startup, `overlaynet.Manager` runs:
 3. **Peer routes** — `via <peer_overlay_ip> dev <bridge>` for other node subnets
 4. **Container routes** — `/32 via <node_overlay_ip>` for remote container overlay IPs
 5. **Continuous reconcile** — on every `reconcile_interval` and every `reconcile.trigger` event
-6. **Cluster sync** — periodically fetches node/container lists from the API (drift correction)
+6. **Cluster sync** — `GetClusterNetworkState` gRPC call (drift correction)
 
 Uses `ip link`, `ip addr`, `ip route` (`CAP_NET_ADMIN` required).
 
 On macOS/dev: stub mode logs only, no real network changes.
 
-## gRPC stream
+The agent uses **gRPC only** (no HTTP). All control-plane communication goes through `AgentService`:
 
-Proto: `api/proto/atellar/v1/agent.proto`
+- `Connect` — heartbeat + peer events
+- `RenewNodeAPIKey` — API key renewal
+- `GetClusterNetworkState` — periodic overlay cluster sync
 
-| Direction | Message | Description |
-|-----------|---------|-------------|
-| Agent → Server | `Heartbeat` | Periodic liveness |
-| Agent → Server | `Ingest` | Event ingest (MVP: ack only) |
-| Server → Agent | `HeartbeatAck` | Heartbeat response |
-| Server → Agent | `RpcCall` | `reconcile.trigger` peer events |
+HTTP REST API (`control_plane_url`) is for external tools, CLI (`join`), and custom plugins — not the agent.
 
 ## Peer reconcile
 

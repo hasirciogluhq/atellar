@@ -81,6 +81,7 @@ func main() {
 		if err := grpcserver.ListenAndServe(config.GRPCPort, grpcserver.Deps{
 			NodeAuth:      infra.NodeAuth,
 			Nodes:         infra.Repositories.Nodes,
+			Containers:    infra.Repositories.Containers,
 			AgentRegistry: infra.AgentRegistry,
 		}); err != nil {
 			panic(err)

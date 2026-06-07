@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_Connect_FullMethodName         = "/atellar.v1.AgentService/Connect"
-	AgentService_RenewNodeAPIKey_FullMethodName = "/atellar.v1.AgentService/RenewNodeAPIKey"
+	AgentService_Connect_FullMethodName                = "/atellar.v1.AgentService/Connect"
+	AgentService_RenewNodeAPIKey_FullMethodName        = "/atellar.v1.AgentService/RenewNodeAPIKey"
+	AgentService_GetClusterNetworkState_FullMethodName = "/atellar.v1.AgentService/GetClusterNetworkState"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -29,6 +30,7 @@ const (
 type AgentServiceClient interface {
 	Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AgentEnvelope, ServerEnvelope], error)
 	RenewNodeAPIKey(ctx context.Context, in *RenewNodeAPIKeyRequest, opts ...grpc.CallOption) (*RenewNodeAPIKeyResponse, error)
+	GetClusterNetworkState(ctx context.Context, in *GetClusterNetworkStateRequest, opts ...grpc.CallOption) (*GetClusterNetworkStateResponse, error)
 }
 
 type agentServiceClient struct {
@@ -62,12 +64,23 @@ func (c *agentServiceClient) RenewNodeAPIKey(ctx context.Context, in *RenewNodeA
 	return out, nil
 }
 
+func (c *agentServiceClient) GetClusterNetworkState(ctx context.Context, in *GetClusterNetworkStateRequest, opts ...grpc.CallOption) (*GetClusterNetworkStateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetClusterNetworkStateResponse)
+	err := c.cc.Invoke(ctx, AgentService_GetClusterNetworkState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
 type AgentServiceServer interface {
 	Connect(grpc.BidiStreamingServer[AgentEnvelope, ServerEnvelope]) error
 	RenewNodeAPIKey(context.Context, *RenewNodeAPIKeyRequest) (*RenewNodeAPIKeyResponse, error)
+	GetClusterNetworkState(context.Context, *GetClusterNetworkStateRequest) (*GetClusterNetworkStateResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -83,6 +96,9 @@ func (UnimplementedAgentServiceServer) Connect(grpc.BidiStreamingServer[AgentEnv
 }
 func (UnimplementedAgentServiceServer) RenewNodeAPIKey(context.Context, *RenewNodeAPIKeyRequest) (*RenewNodeAPIKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenewNodeAPIKey not implemented")
+}
+func (UnimplementedAgentServiceServer) GetClusterNetworkState(context.Context, *GetClusterNetworkStateRequest) (*GetClusterNetworkStateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetClusterNetworkState not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -130,6 +146,24 @@ func _AgentService_RenewNodeAPIKey_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_GetClusterNetworkState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetClusterNetworkStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetClusterNetworkState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_GetClusterNetworkState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetClusterNetworkState(ctx, req.(*GetClusterNetworkStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -140,6 +174,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RenewNodeAPIKey",
 			Handler:    _AgentService_RenewNodeAPIKey_Handler,
+		},
+		{
+			MethodName: "GetClusterNetworkState",
+			Handler:    _AgentService_GetClusterNetworkState_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

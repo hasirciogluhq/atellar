@@ -674,6 +674,230 @@ func (x *RenewNodeAPIKeyResponse) GetExpiresAtUnix() int64 {
 	return 0
 }
 
+type GetClusterNetworkStateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetClusterNetworkStateRequest) Reset() {
+	*x = GetClusterNetworkStateRequest{}
+	mi := &file_atellar_v1_agent_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetClusterNetworkStateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetClusterNetworkStateRequest) ProtoMessage() {}
+
+func (x *GetClusterNetworkStateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_atellar_v1_agent_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetClusterNetworkStateRequest.ProtoReflect.Descriptor instead.
+func (*GetClusterNetworkStateRequest) Descriptor() ([]byte, []int) {
+	return file_atellar_v1_agent_proto_rawDescGZIP(), []int{10}
+}
+
+type ClusterNode struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OverlayIp     string                 `protobuf:"bytes,2,opt,name=overlay_ip,json=overlayIp,proto3" json:"overlay_ip,omitempty"`
+	OverlaySubnet string                 `protobuf:"bytes,3,opt,name=overlay_subnet,json=overlaySubnet,proto3" json:"overlay_subnet,omitempty"`
+	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClusterNode) Reset() {
+	*x = ClusterNode{}
+	mi := &file_atellar_v1_agent_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClusterNode) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClusterNode) ProtoMessage() {}
+
+func (x *ClusterNode) ProtoReflect() protoreflect.Message {
+	mi := &file_atellar_v1_agent_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClusterNode.ProtoReflect.Descriptor instead.
+func (*ClusterNode) Descriptor() ([]byte, []int) {
+	return file_atellar_v1_agent_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ClusterNode) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ClusterNode) GetOverlayIp() string {
+	if x != nil {
+		return x.OverlayIp
+	}
+	return ""
+}
+
+func (x *ClusterNode) GetOverlaySubnet() string {
+	if x != nil {
+		return x.OverlaySubnet
+	}
+	return ""
+}
+
+func (x *ClusterNode) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type ClusterContainer struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	OverlayIp     string                 `protobuf:"bytes,3,opt,name=overlay_ip,json=overlayIp,proto3" json:"overlay_ip,omitempty"`
+	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClusterContainer) Reset() {
+	*x = ClusterContainer{}
+	mi := &file_atellar_v1_agent_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClusterContainer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClusterContainer) ProtoMessage() {}
+
+func (x *ClusterContainer) ProtoReflect() protoreflect.Message {
+	mi := &file_atellar_v1_agent_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClusterContainer.ProtoReflect.Descriptor instead.
+func (*ClusterContainer) Descriptor() ([]byte, []int) {
+	return file_atellar_v1_agent_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ClusterContainer) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ClusterContainer) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *ClusterContainer) GetOverlayIp() string {
+	if x != nil {
+		return x.OverlayIp
+	}
+	return ""
+}
+
+func (x *ClusterContainer) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type GetClusterNetworkStateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nodes         []*ClusterNode         `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	Containers    []*ClusterContainer    `protobuf:"bytes,2,rep,name=containers,proto3" json:"containers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetClusterNetworkStateResponse) Reset() {
+	*x = GetClusterNetworkStateResponse{}
+	mi := &file_atellar_v1_agent_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetClusterNetworkStateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetClusterNetworkStateResponse) ProtoMessage() {}
+
+func (x *GetClusterNetworkStateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_atellar_v1_agent_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetClusterNetworkStateResponse.ProtoReflect.Descriptor instead.
+func (*GetClusterNetworkStateResponse) Descriptor() ([]byte, []int) {
+	return file_atellar_v1_agent_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetClusterNetworkStateResponse) GetNodes() []*ClusterNode {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+func (x *GetClusterNetworkStateResponse) GetContainers() []*ClusterContainer {
+	if x != nil {
+		return x.Containers
+	}
+	return nil
+}
+
 var File_atellar_v1_agent_proto protoreflect.FileDescriptor
 
 const file_atellar_v1_agent_proto_rawDesc = "" +
@@ -716,14 +940,33 @@ const file_atellar_v1_agent_proto_rawDesc = "" +
 	"\x17RenewNodeAPIKeyResponse\x12 \n" +
 	"\fnode_api_key\x18\x01 \x01(\tR\n" +
 	"nodeApiKey\x12&\n" +
-	"\x0fexpires_at_unix\x18\x02 \x01(\x03R\rexpiresAtUnix*^\n" +
+	"\x0fexpires_at_unix\x18\x02 \x01(\x03R\rexpiresAtUnix\"\x1f\n" +
+	"\x1dGetClusterNetworkStateRequest\"{\n" +
+	"\vClusterNode\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"overlay_ip\x18\x02 \x01(\tR\toverlayIp\x12%\n" +
+	"\x0eoverlay_subnet\x18\x03 \x01(\tR\roverlaySubnet\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\"r\n" +
+	"\x10ClusterContainer\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"overlay_ip\x18\x03 \x01(\tR\toverlayIp\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\"\x8d\x01\n" +
+	"\x1eGetClusterNetworkStateResponse\x12-\n" +
+	"\x05nodes\x18\x01 \x03(\v2\x17.atellar.v1.ClusterNodeR\x05nodes\x12<\n" +
+	"\n" +
+	"containers\x18\x02 \x03(\v2\x1c.atellar.v1.ClusterContainerR\n" +
+	"containers*^\n" +
 	"\fDeliveryMode\x12\x1d\n" +
 	"\x19DELIVERY_MODE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12DELIVERY_MODE_SYNC\x10\x01\x12\x17\n" +
-	"\x13DELIVERY_MODE_ASYNC\x10\x022\xb0\x01\n" +
+	"\x13DELIVERY_MODE_ASYNC\x10\x022\xa1\x02\n" +
 	"\fAgentService\x12D\n" +
 	"\aConnect\x12\x19.atellar.v1.AgentEnvelope\x1a\x1a.atellar.v1.ServerEnvelope(\x010\x01\x12Z\n" +
-	"\x0fRenewNodeAPIKey\x12\".atellar.v1.RenewNodeAPIKeyRequest\x1a#.atellar.v1.RenewNodeAPIKeyResponseBIZGgithub.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1;atellarv1b\x06proto3"
+	"\x0fRenewNodeAPIKey\x12\".atellar.v1.RenewNodeAPIKeyRequest\x1a#.atellar.v1.RenewNodeAPIKeyResponse\x12o\n" +
+	"\x16GetClusterNetworkState\x12).atellar.v1.GetClusterNetworkStateRequest\x1a*.atellar.v1.GetClusterNetworkStateResponseBIZGgithub.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1;atellarv1b\x06proto3"
 
 var (
 	file_atellar_v1_agent_proto_rawDescOnce sync.Once
@@ -738,19 +981,23 @@ func file_atellar_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_atellar_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_atellar_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_atellar_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_atellar_v1_agent_proto_goTypes = []any{
-	(DeliveryMode)(0),               // 0: atellar.v1.DeliveryMode
-	(*AgentEnvelope)(nil),           // 1: atellar.v1.AgentEnvelope
-	(*ServerEnvelope)(nil),          // 2: atellar.v1.ServerEnvelope
-	(*Heartbeat)(nil),               // 3: atellar.v1.Heartbeat
-	(*HeartbeatAck)(nil),            // 4: atellar.v1.HeartbeatAck
-	(*Ingest)(nil),                  // 5: atellar.v1.Ingest
-	(*IngestAck)(nil),               // 6: atellar.v1.IngestAck
-	(*RpcCall)(nil),                 // 7: atellar.v1.RpcCall
-	(*RpcResult)(nil),               // 8: atellar.v1.RpcResult
-	(*RenewNodeAPIKeyRequest)(nil),  // 9: atellar.v1.RenewNodeAPIKeyRequest
-	(*RenewNodeAPIKeyResponse)(nil), // 10: atellar.v1.RenewNodeAPIKeyResponse
+	(DeliveryMode)(0),                      // 0: atellar.v1.DeliveryMode
+	(*AgentEnvelope)(nil),                  // 1: atellar.v1.AgentEnvelope
+	(*ServerEnvelope)(nil),                 // 2: atellar.v1.ServerEnvelope
+	(*Heartbeat)(nil),                      // 3: atellar.v1.Heartbeat
+	(*HeartbeatAck)(nil),                   // 4: atellar.v1.HeartbeatAck
+	(*Ingest)(nil),                         // 5: atellar.v1.Ingest
+	(*IngestAck)(nil),                      // 6: atellar.v1.IngestAck
+	(*RpcCall)(nil),                        // 7: atellar.v1.RpcCall
+	(*RpcResult)(nil),                      // 8: atellar.v1.RpcResult
+	(*RenewNodeAPIKeyRequest)(nil),         // 9: atellar.v1.RenewNodeAPIKeyRequest
+	(*RenewNodeAPIKeyResponse)(nil),        // 10: atellar.v1.RenewNodeAPIKeyResponse
+	(*GetClusterNetworkStateRequest)(nil),  // 11: atellar.v1.GetClusterNetworkStateRequest
+	(*ClusterNode)(nil),                    // 12: atellar.v1.ClusterNode
+	(*ClusterContainer)(nil),               // 13: atellar.v1.ClusterContainer
+	(*GetClusterNetworkStateResponse)(nil), // 14: atellar.v1.GetClusterNetworkStateResponse
 }
 var file_atellar_v1_agent_proto_depIdxs = []int32{
 	3,  // 0: atellar.v1.AgentEnvelope.heartbeat:type_name -> atellar.v1.Heartbeat
@@ -760,15 +1007,19 @@ var file_atellar_v1_agent_proto_depIdxs = []int32{
 	7,  // 4: atellar.v1.ServerEnvelope.rpc_call:type_name -> atellar.v1.RpcCall
 	6,  // 5: atellar.v1.ServerEnvelope.ingest_ack:type_name -> atellar.v1.IngestAck
 	0,  // 6: atellar.v1.RpcCall.mode:type_name -> atellar.v1.DeliveryMode
-	1,  // 7: atellar.v1.AgentService.Connect:input_type -> atellar.v1.AgentEnvelope
-	9,  // 8: atellar.v1.AgentService.RenewNodeAPIKey:input_type -> atellar.v1.RenewNodeAPIKeyRequest
-	2,  // 9: atellar.v1.AgentService.Connect:output_type -> atellar.v1.ServerEnvelope
-	10, // 10: atellar.v1.AgentService.RenewNodeAPIKey:output_type -> atellar.v1.RenewNodeAPIKeyResponse
-	9,  // [9:11] is the sub-list for method output_type
-	7,  // [7:9] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	12, // 7: atellar.v1.GetClusterNetworkStateResponse.nodes:type_name -> atellar.v1.ClusterNode
+	13, // 8: atellar.v1.GetClusterNetworkStateResponse.containers:type_name -> atellar.v1.ClusterContainer
+	1,  // 9: atellar.v1.AgentService.Connect:input_type -> atellar.v1.AgentEnvelope
+	9,  // 10: atellar.v1.AgentService.RenewNodeAPIKey:input_type -> atellar.v1.RenewNodeAPIKeyRequest
+	11, // 11: atellar.v1.AgentService.GetClusterNetworkState:input_type -> atellar.v1.GetClusterNetworkStateRequest
+	2,  // 12: atellar.v1.AgentService.Connect:output_type -> atellar.v1.ServerEnvelope
+	10, // 13: atellar.v1.AgentService.RenewNodeAPIKey:output_type -> atellar.v1.RenewNodeAPIKeyResponse
+	14, // 14: atellar.v1.AgentService.GetClusterNetworkState:output_type -> atellar.v1.GetClusterNetworkStateResponse
+	12, // [12:15] is the sub-list for method output_type
+	9,  // [9:12] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_atellar_v1_agent_proto_init() }
@@ -792,7 +1043,7 @@ func file_atellar_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_atellar_v1_agent_proto_rawDesc), len(file_atellar_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -27,7 +27,7 @@ sudo go run ./cmd/cli install --agent-bin ./atellar-agent
 |-----------|--------|------|
 | **API Server** | `cmd/api` | HTTP `:8080` + gRPC `:9090`, node/container management, overlay IPAM |
 | **CLI** | `cmd/cli` | `join`, `install`, `renew-api-key` |
-| **Agent** | `cmd/agent` | Reads config, gRPC stream, heartbeat, peer reconcile events |
+| **Agent** | `cmd/agent` | gRPC-only: config, stream, heartbeat, overlay reconcile |
 
 ## Architecture (overview)
 
