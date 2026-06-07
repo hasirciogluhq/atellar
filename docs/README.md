@@ -11,6 +11,7 @@
 | [api-server.md](api-server.md) | HTTP/gRPC API, routes, infrastructure |
 | [config.md](config.md) | Environment variables and config files |
 | [peer-events.md](peer-events.md) | Node and container peer notification events |
+| [networking.md](networking.md) | Overlay IPAM, netns setup, diagnostics |
 | [code-layout.md](code-layout.md) | Folder structure and dependency rules |
 
 Project conventions for contributors and AI: `.cursor/rules/atellar.mdc`

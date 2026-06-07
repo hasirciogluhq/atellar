@@ -34,6 +34,8 @@ No environment variables. Single source: `/etc/atellar/agent.json`
 
 Details: [agent.md](agent.md)
 
+**Container networking requires** `overlay_ip` and `overlay_subnet` (set at join/register). They must match the bridge address on `bridge_name` (default `atellar0`). Troubleshooting: [networking.md](networking.md).
+
 ## Post-join config example
 
 ```json

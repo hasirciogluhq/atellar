@@ -34,10 +34,12 @@ Push events on stream: `workload.dispatch`, `workload.removed` (trigger immediat
 1. `pulling` — image pull (skip if digest matches)
 2. `creating` — prepare containerd container
 3. `AllocateContainerOverlayIP` — CP assigns overlay IP from node pool
-4. veth + netns setup (`internal/agent/netns`)
+4. veth + netns setup (`internal/agent/netns`) — uses `overlay_ip` / `overlay_subnet` from agent config as gateway and address prefix
 5. `running` — containerd task start + report PID/digest
 
-On failure: `backoff` with exponential delay (max 5 retries) → `failed`.
+`runtime.NewManager` receives `cfg.OverlayIP` and `cfg.OverlaySubnet` from `agent.json` and passes them to `netns.Setup` as `NodeOverlayIP` and `NodeOverlaySubnet`. Without a valid node overlay IP on the bridge, default-route setup fails (`Nexthop has invalid gateway`). See [networking.md](networking.md).
+
+On failure: `backoff` with exponential delay (max 5 retries) → `failed`. CLI `containers list` shows the `ERROR` column.
 
 On `DELETE /containers/:id`: CP sets `removed` → agent terminates, cleans netns/containerd, reports `terminated`.
 

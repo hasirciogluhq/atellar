@@ -98,6 +98,15 @@ curl -X POST http://localhost:8080/api/v1/containers \
 
 Target node receives `workload.dispatch`; peer nodes receive `container.scheduled` for overlay routes.
 
+Verify on the control plane:
+
+```bash
+atelctl cluster containers list \
+  --control-plane-address localhost --http-port 8080 --grpc-port 9090
+```
+
+`STATUS` should be `running` with an `OVERLAY_IP`. If `failed`, check `ERROR` and run diagnostics on the scheduled node — see [networking.md](networking.md).
+
 Delete:
 
 ```bash

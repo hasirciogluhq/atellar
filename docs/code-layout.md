@@ -77,14 +77,12 @@ pkg/
 | `pkg/client` | HTTP (atelctl, external plugins) |
 | `cmd/api` routes | HTTP REST |
 
-## Future (when adding vmnet / container netns)
-
-Keep under `internal/agent/`:
+## Agent networking (`internal/agent/`)
 
 ```
 agent/
-  overlay/          # node overlay bridge + cluster routes (existing)
-  netns/            # per-container veth, netns setup (future)
+  overlay/          # node overlay bridge + cluster routes (linux)
+  netns/            # per-container veth, netns, default route (linux)
   vmnet/            # optional VM bridge/tap (future)
 ```
 

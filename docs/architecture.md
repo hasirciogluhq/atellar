@@ -56,6 +56,8 @@ API keys are stored in the DB as SHA-256 hashes.
 - Remaining IPs are assigned to containers via `overlay_ip_pool`
 - Evicted node subnets are reclaimed on the next registration
 
+Per-node bridge + per-container veth/netns: [networking.md](networking.md).
+
 ## Infrastructure wiring
 
 `cmd/api/shared/infrasturcture.go` creates on startup:
