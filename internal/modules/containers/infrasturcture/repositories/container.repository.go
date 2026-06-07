@@ -12,7 +12,7 @@ import (
 	containerevent "github.com/hasirciogluhq/atellar/internal/modules/containers/domain/container-event"
 	overlayippool "github.com/hasirciogluhq/atellar/internal/modules/containers/domain/overlay-ip-pool"
 	"github.com/hasirciogluhq/atellar/internal/modules/containers/ports"
-	"github.com/hasirciogluhq/atellar/internal/pkg/pgutil"
+	"github.com/hasirciogluhq/atellar/internal/platform/pgutil"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )

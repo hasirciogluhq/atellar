@@ -11,6 +11,7 @@
 | [api-server.md](api-server.md) | HTTP/gRPC API, routes, infrastructure |
 | [config.md](config.md) | Environment variables and config files |
 | [peer-events.md](peer-events.md) | Node and container peer notification events |
+| [code-layout.md](code-layout.md) | Folder structure and dependency rules |
 
 ## Repository layout (summary)
 
@@ -22,7 +23,10 @@ cmd/
 internal/
   modules/nodes/       Node domain + use cases
   modules/containers/  Container domain + use cases
-  grpc/                gRPC server, agent client, peer registry
-  pkg/                 agentconfig, authn, overlayipam, overlaynet, ...
+  grpc/                gRPC server, peer registry
+  agent/               config, grpcclient, overlay
+  cluster/ipam/        control plane overlay IPAM
+  platform/            authn, pgutil, tokenhash
+  client/controlplane/ HTTP client for CLI/plugins
 api/proto/             Protobuf definitions
 ```

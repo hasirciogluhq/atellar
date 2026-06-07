@@ -7,13 +7,13 @@ import (
 	"github.com/hasirciogluhq/atellar/internal/modules/containers/ports"
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/node"
 	nodeports "github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
-	"github.com/hasirciogluhq/atellar/internal/pkg/overlayipam"
+	"github.com/hasirciogluhq/atellar/internal/cluster/ipam"
 )
 
 type OverlayProvisioner struct {
 	nodeRepository      nodeports.NodeRepositoryInterface
 	containerRepository ports.ContainerRepositoryInterface
-	allocator           *overlayipam.Allocator
+	allocator           *ipam.Allocator
 }
 
 func NewOverlayProvisioner(
@@ -22,7 +22,7 @@ func NewOverlayProvisioner(
 	clusterCIDR string,
 	nodeSubnetPrefixLen int,
 ) (*OverlayProvisioner, error) {
-	allocator, err := overlayipam.NewAllocator(clusterCIDR, nodeSubnetPrefixLen)
+	allocator, err := ipam.NewAllocator(clusterCIDR, nodeSubnetPrefixLen)
 	if err != nil {
 		return nil, err
 	}
@@ -45,9 +45,9 @@ func (p *OverlayProvisioner) ProvisionNodeOverlay(ctx context.Context, nodeID st
 		return nil, err
 	}
 
-	reclaimCandidates := make([]overlayipam.ReclaimableSubnet, 0, len(reclaimable))
+	reclaimCandidates := make([]ipam.ReclaimableSubnet, 0, len(reclaimable))
 	for _, candidate := range reclaimable {
-		reclaimCandidates = append(reclaimCandidates, overlayipam.ReclaimableSubnet{
+		reclaimCandidates = append(reclaimCandidates, ipam.ReclaimableSubnet{
 			SourceNodeID: candidate.NodeID,
 			SubnetCIDR:   candidate.SubnetCIDR,
 		})

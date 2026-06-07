@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hasirciogluhq/atellar/internal/cli/install"
-	"github.com/hasirciogluhq/atellar/internal/pkg/agentconfig"
+	"github.com/hasirciogluhq/atellar/internal/agent/config"
 	"github.com/spf13/cobra"
 )
 
@@ -38,7 +38,7 @@ var installCmd = &cobra.Command{
 func init() {
 	installCmd.Flags().StringVar(&installAgentBinSource, "agent-bin", "", "path to atellar-agent binary (required)")
 	installCmd.Flags().StringVar(&installAgentBinTarget, "target", install.DefaultAgentBinPath, "install destination for agent binary")
-	installCmd.Flags().StringVar(&installConfigPath, "config", agentconfig.SystemConfigPath, "agent config path")
+	installCmd.Flags().StringVar(&installConfigPath, "config", config.SystemConfigPath, "agent config path")
 
 	_ = installCmd.MarkFlagRequired("agent-bin")
 

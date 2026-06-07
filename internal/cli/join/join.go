@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/hasirciogluhq/atellar/internal/agent"
-	"github.com/hasirciogluhq/atellar/internal/pkg/agentconfig"
-	"github.com/hasirciogluhq/atellar/internal/pkg/controlplane"
+	"github.com/hasirciogluhq/atellar/internal/agent/config"
+	"github.com/hasirciogluhq/atellar/internal/client/controlplane"
 )
 
 type Options struct {
@@ -20,7 +20,7 @@ type Options struct {
 	ConfigPath        string
 }
 
-func Execute(ctx context.Context, opts Options) (*agentconfig.Config, error) {
+func Execute(ctx context.Context, opts Options) (*config.Config, error) {
 	if opts.Token == "" {
 		return nil, fmt.Errorf("join token is required")
 	}
@@ -32,7 +32,7 @@ func Execute(ctx context.Context, opts Options) (*agentconfig.Config, error) {
 
 	configPath := opts.ConfigPath
 	if configPath == "" {
-		configPath = agentconfig.SystemConfigPath
+		configPath = config.SystemConfigPath
 	}
 
 	containerdSock := opts.ContainerdSock
@@ -57,7 +57,7 @@ func Execute(ctx context.Context, opts Options) (*agentconfig.Config, error) {
 		return nil, err
 	}
 
-	cfg := agentconfig.Config{
+	cfg := config.Config{
 		ControlPlaneURL:   controlPlaneURL,
 		NodeID:            result.Node.ID,
 		NodeName:          result.Node.Name,
@@ -69,7 +69,7 @@ func Execute(ctx context.Context, opts Options) (*agentconfig.Config, error) {
 		HeartbeatInterval: heartbeatInterval,
 	}
 
-	if err := agentconfig.Save(configPath, cfg); err != nil {
+	if err := config.Save(configPath, cfg); err != nil {
 		return nil, err
 	}
 

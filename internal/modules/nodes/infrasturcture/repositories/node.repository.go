@@ -11,9 +11,9 @@ import (
 	joinToken "github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/join-token"
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/node"
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
-	"github.com/hasirciogluhq/atellar/internal/pkg/nodetoken"
-	"github.com/hasirciogluhq/atellar/internal/pkg/pgutil"
-	"github.com/hasirciogluhq/atellar/internal/pkg/tokenhash"
+	"github.com/hasirciogluhq/atellar/internal/platform/nodetoken"
+	"github.com/hasirciogluhq/atellar/internal/platform/pgutil"
+	"github.com/hasirciogluhq/atellar/internal/platform/tokenhash"
 	"github.com/jackc/pgx/v5"
 )
 

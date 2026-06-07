@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hasirciogluhq/atellar/internal/cli/renew"
-	"github.com/hasirciogluhq/atellar/internal/pkg/agentconfig"
+	"github.com/hasirciogluhq/atellar/internal/agent/config"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +43,7 @@ var renewCmd = &cobra.Command{
 func init() {
 	renewCmd.Flags().StringVar(&renewControlPlaneURL, "control-plane-url", "", "control plane base URL")
 	renewCmd.Flags().StringVar(&renewNodeAPIKey, "api-key", "", "current node api key")
-	renewCmd.Flags().StringVar(&renewConfigPath, "config", agentconfig.SystemConfigPath, "agent config path")
+	renewCmd.Flags().StringVar(&renewConfigPath, "config", config.SystemConfigPath, "agent config path")
 	renewCmd.Flags().BoolVar(&renewUpdateConfig, "update-config", true, "write renewed api key to config file")
 
 	rootCmd.AddCommand(renewCmd)

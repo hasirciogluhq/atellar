@@ -10,7 +10,7 @@ import (
 	nodeservices "github.com/hasirciogluhq/atellar/internal/modules/nodes/application/services"
 	nodeports "github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
 	nodePostgres "github.com/hasirciogluhq/atellar/internal/modules/nodes/infrasturcture/repositories"
-	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
+	"github.com/hasirciogluhq/atellar/internal/platform/authn"
 )
 
 type Repositories struct {

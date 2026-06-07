@@ -1,4 +1,4 @@
-package agentclient
+package grpcclient
 
 import (
 	"context"
@@ -9,27 +9,27 @@ import (
 	"time"
 
 	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
-	"github.com/hasirciogluhq/atellar/internal/pkg/agentconfig"
-	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
-	"github.com/hasirciogluhq/atellar/internal/pkg/nodetoken"
-	"github.com/hasirciogluhq/atellar/internal/pkg/overlaynet"
+	"github.com/hasirciogluhq/atellar/internal/agent/config"
+	"github.com/hasirciogluhq/atellar/internal/agent/overlay"
+	"github.com/hasirciogluhq/atellar/internal/platform/authn"
+	"github.com/hasirciogluhq/atellar/internal/platform/nodetoken"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 type networkReconciler interface {
-	HandlePeerEvent(event overlaynet.PeerEvent)
+	HandlePeerEvent(event overlay.PeerEvent)
 }
 
 type Session struct {
-	cfg        *agentconfig.Config
+	cfg        *config.Config
 	configPath string
 	conn       *grpc.ClientConn
 	client     atellarv1.AgentServiceClient
 	network    networkReconciler
 }
 
-func NewSession(cfg *agentconfig.Config, configPath string, network networkReconciler) (*Session, error) {
+func NewSession(cfg *config.Config, configPath string, network networkReconciler) (*Session, error) {
 	conn, err := grpc.NewClient(
 		cfg.ResolveGrpcAddr(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -127,7 +127,7 @@ func (s *Session) handleRpcCall(call *atellarv1.RpcCall) {
 
 	switch call.GetMethod() {
 	case "reconcile.trigger":
-		var payload overlaynet.PeerEvent
+		var payload overlay.PeerEvent
 		if err := json.Unmarshal(call.GetPayload(), &payload); err != nil {
 			log.Printf("reconcile.trigger invalid payload: %v", err)
 			return
@@ -175,7 +175,7 @@ func (s *Session) renewAPIKey(ctx context.Context) error {
 	s.cfg.NodeAPIKey = resp.GetNodeApiKey()
 	s.cfg.APIKeyExpiresAt = time.Unix(resp.GetExpiresAtUnix(), 0)
 
-	if err := agentconfig.Save(s.configPath, *s.cfg); err != nil {
+	if err := config.Save(s.configPath, *s.cfg); err != nil {
 		return err
 	}
 

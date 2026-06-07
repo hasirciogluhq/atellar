@@ -51,7 +51,7 @@ The agent does **not** use environment variables.
 
 ## Overlay network (Linux)
 
-On startup, `overlaynet.Manager` runs:
+On startup, `overlay.Manager` runs:
 
 1. **Bridge** — creates and brings UP `bridge_name` (default `atellar0`)
 2. **Local IP** — assigns `overlay_ip/overlay_subnet` to the bridge
@@ -89,6 +89,6 @@ The `install` command creates an `atellar-agent.service` unit:
 ## Related code
 
 - `internal/agent/agent.go` — entry point
-- `internal/grpc/agentclient/session.go` — stream, heartbeat, renew, RPC handler
-- `internal/pkg/overlaynet/` — bridge, IP, route reconcile
-- `internal/pkg/agentconfig/` — config load/save
+- `internal/agent/grpcclient/` — gRPC session, heartbeat, renew
+- `internal/agent/overlay/` — bridge, IP, route reconcile
+- `internal/agent/config/` — config load/save

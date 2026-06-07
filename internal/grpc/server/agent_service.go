@@ -9,7 +9,7 @@ import (
 	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
 	containerusecases "github.com/hasirciogluhq/atellar/internal/modules/containers/application/usecases"
 	nodeusecases "github.com/hasirciogluhq/atellar/internal/modules/nodes/application/usecases"
-	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
+	"github.com/hasirciogluhq/atellar/internal/platform/authn"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

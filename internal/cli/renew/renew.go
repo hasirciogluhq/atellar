@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hasirciogluhq/atellar/internal/pkg/agentconfig"
-	"github.com/hasirciogluhq/atellar/internal/pkg/controlplane"
+	"github.com/hasirciogluhq/atellar/internal/agent/config"
+	"github.com/hasirciogluhq/atellar/internal/client/controlplane"
 )
 
 type Options struct {
@@ -24,14 +24,14 @@ type Result struct {
 func Execute(ctx context.Context, opts Options) (*Result, error) {
 	configPath := opts.ConfigPath
 	if configPath == "" {
-		configPath = agentconfig.SystemConfigPath
+		configPath = config.SystemConfigPath
 	}
 
 	controlPlaneURL := opts.ControlPlaneURL
 	apiKey := opts.NodeAPIKey
 
 	if opts.UpdateConfig || (controlPlaneURL == "" && apiKey == "") {
-		cfg, err := agentconfig.Load(configPath)
+		cfg, err := config.Load(configPath)
 		if err != nil {
 			return nil, fmt.Errorf("load config: %w", err)
 		}
@@ -60,7 +60,7 @@ func Execute(ctx context.Context, opts Options) (*Result, error) {
 	}
 
 	if opts.UpdateConfig || opts.ConfigPath != "" {
-		if err := agentconfig.UpdateNodeAPIKey(configPath, renewed.NodeAPIKey, renewed.APIKeyExpiresAt); err != nil {
+		if err := config.UpdateNodeAPIKey(configPath, renewed.NodeAPIKey, renewed.APIKeyExpiresAt); err != nil {
 			return nil, fmt.Errorf("update config: %w", err)
 		}
 	}

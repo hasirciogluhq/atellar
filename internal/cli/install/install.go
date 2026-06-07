@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/hasirciogluhq/atellar/internal/pkg/agentconfig"
+	"github.com/hasirciogluhq/atellar/internal/agent/config"
 )
 
 const (
@@ -40,7 +40,7 @@ func Execute(opts Options) (*Result, error) {
 
 	configPath := opts.ConfigPath
 	if configPath == "" {
-		configPath = agentconfig.SystemConfigPath
+		configPath = config.SystemConfigPath
 	}
 
 	if _, err := os.Stat(configPath); err != nil {

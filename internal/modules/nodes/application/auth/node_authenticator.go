@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
-	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
+	"github.com/hasirciogluhq/atellar/internal/platform/authn"
 )
 
 type NodeAuthenticator struct {

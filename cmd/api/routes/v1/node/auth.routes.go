@@ -7,7 +7,7 @@ import (
 	"github.com/hasirciogluhq/atellar/cmd/api/middleware"
 	"github.com/hasirciogluhq/atellar/cmd/api/shared"
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/application/usecases"
-	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
+	"github.com/hasirciogluhq/atellar/internal/platform/authn"
 )
 
 func registerNodeAuthRoutes(c *gin.RouterGroup, infra *shared.Infrastructure) {

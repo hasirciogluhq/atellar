@@ -1,4 +1,4 @@
-package overlaynet
+package overlay
 
 import "net"
 

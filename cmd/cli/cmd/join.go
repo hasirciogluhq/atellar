@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hasirciogluhq/atellar/internal/cli/join"
-	"github.com/hasirciogluhq/atellar/internal/pkg/agentconfig"
+	"github.com/hasirciogluhq/atellar/internal/agent/config"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +40,7 @@ var joinCmd = &cobra.Command{
 
 		configPath := joinConfigPath
 		if configPath == "" {
-			configPath = agentconfig.SystemConfigPath
+			configPath = config.SystemConfigPath
 		}
 
 		fmt.Printf("node joined successfully\n")
@@ -59,7 +59,7 @@ func init() {
 	joinCmd.Flags().StringVar(&joinPrivateIP, "private-ip", "", "node private IP")
 	joinCmd.Flags().StringVar(&joinContainerdSock, "containerd-sock", "/run/containerd/containerd.sock", "containerd socket path")
 	joinCmd.Flags().StringVar(&joinHeartbeatInterval, "heartbeat-interval", "5s", "agent heartbeat interval written to config")
-	joinCmd.Flags().StringVar(&joinConfigPath, "config", agentconfig.SystemConfigPath, "agent config output path")
+	joinCmd.Flags().StringVar(&joinConfigPath, "config", config.SystemConfigPath, "agent config output path")
 
 	_ = joinCmd.MarkFlagRequired("token")
 

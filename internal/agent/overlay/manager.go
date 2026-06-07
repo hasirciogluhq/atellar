@@ -1,4 +1,4 @@
-package overlaynet
+package overlay
 
 import (
 	"context"
@@ -110,11 +110,11 @@ func (m *Manager) requestReconcile() {
 
 func (m *Manager) syncAndReconcile(ctx context.Context) {
 	if err := m.syncFromControlPlane(ctx); err != nil {
-		log.Printf("overlaynet cluster sync failed: %v", err)
+		log.Printf("overlay cluster sync failed: %v", err)
 	}
 
 	if err := m.Reconcile(); err != nil {
-		log.Printf("overlaynet reconcile failed: %v", err)
+		log.Printf("overlay reconcile failed: %v", err)
 	}
 }
 
@@ -130,7 +130,7 @@ func (m *Manager) syncFromControlPlane(ctx context.Context) error {
 
 func (m *Manager) reconcileOnce() {
 	if err := m.Reconcile(); err != nil {
-		log.Printf("overlaynet reconcile failed: %v", err)
+		log.Printf("overlay reconcile failed: %v", err)
 	}
 }
 
@@ -158,7 +158,7 @@ func (m *Manager) Reconcile() error {
 	desired := m.state.buildRoutes()
 	current, err := m.links.ListRoutes(local.BridgeName)
 	if err != nil {
-		log.Printf("overlaynet list routes fallback to apply-only: %v", err)
+		log.Printf("overlay list routes fallback to apply-only: %v", err)
 		current = nil
 	}
 
@@ -167,7 +167,7 @@ func (m *Manager) Reconcile() error {
 
 	for key, spec := range desiredSet {
 		if err := m.links.EnsureRoute(spec); err != nil {
-			log.Printf("overlaynet ensure route %s: %v", key, err)
+			log.Printf("overlay ensure route %s: %v", key, err)
 		}
 	}
 
@@ -177,12 +177,12 @@ func (m *Manager) Reconcile() error {
 		}
 
 		if err := m.links.DeleteRoute(spec); err != nil {
-			log.Printf("overlaynet delete stale route %s: %v", key, err)
+			log.Printf("overlay delete stale route %s: %v", key, err)
 		}
 	}
 
 	log.Printf(
-		"overlaynet reconciled bridge=%s local=%s routes=%d",
+		"overlay reconciled bridge=%s local=%s routes=%d",
 		local.BridgeName,
 		localAddr.String(),
 		len(desiredSet),

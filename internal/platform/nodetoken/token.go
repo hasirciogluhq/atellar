@@ -3,7 +3,7 @@ package nodetoken
 import (
 	"time"
 
-	"github.com/hasirciogluhq/atellar/internal/pkg/pgutil"
+	"github.com/hasirciogluhq/atellar/internal/platform/pgutil"
 )
 
 const (

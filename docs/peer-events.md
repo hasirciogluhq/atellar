@@ -86,9 +86,9 @@ On evict, `node.removed` is sent immediately (overlay still valid; peers remove 
 
 ## Agent side
 
-`internal/pkg/overlaynet/` — bridge, IP, and route reconcile (`linux` build tag).
+`internal/agent/overlay/` — bridge, IP, and route reconcile (`linux` build tag).
 
-`internal/grpc/agentclient/session.go` forwards `reconcile.trigger` events to the overlaynet manager.
+`internal/agent/grpcclient/` forwards `reconcile.trigger` events to the overlay manager.
 
 Details: [agent.md](agent.md). Cluster sync uses gRPC `GetClusterNetworkState`, not HTTP.
 

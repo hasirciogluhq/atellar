@@ -1,4 +1,4 @@
-package agentconfig
+package config
 
 import (
 	"encoding/json"

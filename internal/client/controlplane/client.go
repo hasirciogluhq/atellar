@@ -12,7 +12,7 @@ import (
 
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/node"
 	container "github.com/hasirciogluhq/atellar/internal/modules/containers/domain/container"
-	"github.com/hasirciogluhq/atellar/internal/pkg/authn"
+	"github.com/hasirciogluhq/atellar/internal/platform/authn"
 )
 
 type Client struct {

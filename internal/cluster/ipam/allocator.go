@@ -1,4 +1,4 @@
-package overlayipam
+package ipam
 
 import (
 	"errors"

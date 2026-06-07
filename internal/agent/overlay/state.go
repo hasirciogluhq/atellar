@@ -1,18 +1,15 @@
-package overlaynet
+package overlay
 
 import (
 	"net"
 	"sync"
-
-	container "github.com/hasirciogluhq/atellar/internal/modules/containers/domain/container"
-	"github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/node"
 )
 
 type desiredState struct {
-	mu          sync.RWMutex
-	local       LocalNode
-	peers       map[string]PeerNode
-	containers  map[string]RemoteContainer
+	mu         sync.RWMutex
+	local      LocalNode
+	peers      map[string]PeerNode
+	containers map[string]RemoteContainer
 }
 
 func newDesiredState(local LocalNode) *desiredState {
@@ -38,14 +35,6 @@ func (s *desiredState) snapshot() (LocalNode, []PeerNode, []RemoteContainer) {
 	}
 
 	return s.local, peers, containers
-}
-
-func (s *desiredState) updateLocal(overlayIP net.IP, overlaySubnet *net.IPNet) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.local.OverlayIP = overlayIP
-	s.local.OverlaySubnet = overlaySubnet
 }
 
 func (s *desiredState) applyPeerEvent(event PeerEvent) {
@@ -114,7 +103,7 @@ func (s *desiredState) removeContainersOnNodeLocked(nodeID string) {
 	}
 }
 
-func (s *desiredState) syncFromCluster(nodes []node.NodeEntity, containers []container.Entity) {
+func (s *desiredState) syncFromCluster(nodes []ClusterNode, containers []ClusterContainer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -131,7 +120,7 @@ func (s *desiredState) syncFromCluster(nodes []node.NodeEntity, containers []con
 			continue
 		}
 
-		if item.Status == node.NodeStatusEvicted || item.Status == node.NodeStatusEvicting || item.Status == node.NodeStatusDown {
+		if item.Status == nodeStatusEvicted || item.Status == nodeStatusEvicting || item.Status == nodeStatusDown {
 			continue
 		}
 
@@ -219,10 +208,10 @@ func (s *desiredState) buildRoutes() []RouteSpec {
 	return routes
 }
 
-func containerNeedsRoute(status container.Status) bool {
+func containerNeedsRoute(status string) bool {
 	switch status {
-	case container.StatusScheduled, container.StatusPending, container.StatusPulling,
-		container.StatusCreating, container.StatusRunning:
+	case containerStatusScheduled, containerStatusPending, containerStatusPulling,
+		containerStatusCreating, containerStatusRunning:
 		return true
 	default:
 		return false

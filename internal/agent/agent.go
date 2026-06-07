@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hasirciogluhq/atellar/internal/grpc/agentclient"
-	"github.com/hasirciogluhq/atellar/internal/pkg/agentconfig"
-	"github.com/hasirciogluhq/atellar/internal/pkg/overlaynet"
+	"github.com/hasirciogluhq/atellar/internal/agent/config"
+	"github.com/hasirciogluhq/atellar/internal/agent/grpcclient"
+	"github.com/hasirciogluhq/atellar/internal/agent/overlay"
 )
 
 func Run() error {
-	cfg, err := agentconfig.Load(agentconfig.SystemConfigPath)
+	cfg, err := config.Load(config.SystemConfigPath)
 	if err != nil {
 		return err
 	}
@@ -25,13 +25,13 @@ func Run() error {
 		return fmt.Errorf("invalid heartbeat_interval in config: %w", err)
 	}
 
-	session, err := agentclient.NewSession(cfg, agentconfig.SystemConfigPath, nil)
+	session, err := grpcclient.NewSession(cfg, config.SystemConfigPath, nil)
 	if err != nil {
 		return err
 	}
 	defer session.Close()
 
-	netManager, err := overlaynet.NewManager(overlaynet.ManagerConfig{
+	netManager, err := overlay.NewManager(overlay.ManagerConfig{
 		NodeID:            cfg.NodeID,
 		BridgeName:        cfg.ResolveBridgeName(),
 		OverlayIP:         cfg.OverlayIP,
@@ -50,7 +50,7 @@ func Run() error {
 	go netManager.Run(ctx)
 
 	log.Printf("atellar agent started node_id=%s grpc=%s bridge=%s config=%s",
-		cfg.NodeID, cfg.ResolveGrpcAddr(), cfg.ResolveBridgeName(), agentconfig.SystemConfigPath)
+		cfg.NodeID, cfg.ResolveGrpcAddr(), cfg.ResolveBridgeName(), config.SystemConfigPath)
 
 	return session.Run(ctx, heartbeatEvery)
 }

@@ -54,5 +54,4 @@ For detailed usage, config, and architecture:
 - [API server](docs/api-server.md)
 - [Config & environment](docs/config.md)
 - [Peer events (node + container)](docs/peer-events.md)
-
-Source: [github.com/hasirciogluhq/atellar](https://github.com/hasirciogluhq/atellar)
+- [Code layout & dependencies](docs/code-layout.md) [github.com/hasirciogluhq/atellar](https://github.com/hasirciogluhq/atellar)

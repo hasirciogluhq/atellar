@@ -81,3 +81,5 @@ Each domain module (nodes, containers) has these layers:
 - `application/services/` — cross-cutting services (overlay provisioner)
 - `infrastructure/repositories/` — sqlc/PostgreSQL
 - `ports/` — interfaces
+
+Full layout and dependency rules: [code-layout.md](code-layout.md)
