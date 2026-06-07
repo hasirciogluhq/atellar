@@ -8,6 +8,9 @@ set -euo pipefail
 #   curl -fsSL .../install.sh | sudo bash -s -- --version v0.1.0
 #   sudo ./install.sh --local          # from extracted tarball
 
+# Set at release build time by package.sh (empty in repo = prompt/latest).
+RELEASE_VERSION=""
+
 GITHUB_REPO="hasirciogluhq/atellar"
 INSTALL_BIN="/usr/local/bin"
 INSTALL_SHARE="/usr/share/atellar"
@@ -66,20 +69,20 @@ fetch_latest_version() {
   tag="$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" \
     | grep -m1 '"tag_name"' \
     | sed -E 's/.*"tag_name":[[:space:]]*"v?([^"]+)".*/\1/')"
-  [[ -n "${tag}" ]] || die "latest release alınamadı"
+  [[ -n "${tag}" ]] || die "failed to fetch latest release"
   echo "${tag}"
 }
 
 prompt_version() {
   local input=""
   echo ""
-  echo "Atellar kurulumu"
+  echo "Atellar install"
   echo "GitHub: https://github.com/${GITHUB_REPO}/releases"
   echo ""
   if [[ -t 0 ]]; then
-    read -r -p "Kurulacak versiyon (örn. v0.1.0, boş = latest): " input
+    read -r -p "Version to install (e.g. v0.1.0, empty = latest): " input
   elif [[ -e /dev/tty ]]; then
-    read -r -p "Kurulacak versiyon (örn. v0.1.0, boş = latest): " input < /dev/tty
+    read -r -p "Version to install (e.g. v0.1.0, empty = latest): " input < /dev/tty
   else
     USE_LATEST=1
     return
@@ -92,6 +95,11 @@ prompt_version() {
 }
 
 resolve_version() {
+  if [[ -n "${RELEASE_VERSION}" ]]; then
+    VERSION="${RELEASE_VERSION#v}"
+    echo "release: v${VERSION}"
+    return
+  fi
   if [[ "${USE_LATEST}" -eq 1 ]]; then
     VERSION="$(fetch_latest_version)"
     echo "latest release: v${VERSION}"
@@ -123,7 +131,7 @@ find_extracted_root() {
       return 0
     fi
   done
-  die "release paketi açılamadı (atellar_${ver}_linux dizini bulunamadı)"
+  die "failed to extract release package (atellar_${ver}_linux not found)"
 }
 
 resolve_bin_dir() {
@@ -138,7 +146,7 @@ resolve_bin_dir() {
     echo "${root}/bin"
     return
   fi
-  die "binary dizini bulunamadı: ${root}/${arch}/bin"
+  die "binary directory not found: ${root}/${arch}/bin"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -147,7 +155,7 @@ while [[ $# -gt 0 ]]; do
     --latest) USE_LATEST=1; shift ;;
     --local) LOCAL=1; shift ;;
     -h|--help) usage ;;
-    *) die "bilinmeyen argüman: $1" ;;
+    *) die "unknown argument: $1" ;;
   esac
 done
 
@@ -158,33 +166,33 @@ echo "platform: linux/${ARCH}"
 
 if [[ "${LOCAL}" -eq 1 ]] || [[ -d "${SCRIPT_DIR}/amd64/bin" ]] || [[ -d "${SCRIPT_DIR}/bin" ]]; then
   WORK_DIR="${SCRIPT_DIR}"
-  echo "yerel release paketi kullanılıyor: ${WORK_DIR}"
+  echo "using local release package: ${WORK_DIR}"
 else
   resolve_version
   TARBALL="atellar_${VERSION}_linux.tar.gz"
   URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}/${TARBALL}"
   TMP_DIR="$(mktemp -d)"
   trap 'rm -rf "${TMP_DIR}"' EXIT
-  echo "indiriliyor: ${URL}"
+  echo "downloading: ${URL}"
   curl -fsSL "${URL}" -o "${TMP_DIR}/${TARBALL}"
   tar -xzf "${TMP_DIR}/${TARBALL}" -C "${TMP_DIR}"
   WORK_DIR="$(find_extracted_root "${TMP_DIR}" "${VERSION}")"
 fi
 
 BIN_DIR="$(resolve_bin_dir "${WORK_DIR}" "${ARCH}")"
-echo "binary kaynağı: ${BIN_DIR}"
+echo "binary source: ${BIN_DIR}"
 
 for bin in atellar-api atellar-agent atelctl; do
-  [[ -f "${BIN_DIR}/${bin}" ]] || die "binary bulunamadı: ${BIN_DIR}/${bin}"
+  [[ -f "${BIN_DIR}/${bin}" ]] || die "binary not found: ${BIN_DIR}/${bin}"
 done
-[[ -d "${WORK_DIR}/migrations" ]] || die "migrations bulunamadı: ${WORK_DIR}/migrations"
+[[ -d "${WORK_DIR}/migrations" ]] || die "migrations not found: ${WORK_DIR}/migrations"
 
-echo "binary'ler kuruluyor (linux/${ARCH})..."
+echo "installing binaries (linux/${ARCH})..."
 install -m 0755 "${BIN_DIR}/atellar-api" "${INSTALL_BIN}/atellar-api"
 install -m 0755 "${BIN_DIR}/atellar-agent" "${INSTALL_BIN}/atellar-agent"
 install -m 0755 "${BIN_DIR}/atelctl" "${INSTALL_BIN}/atelctl"
 
-echo "migrations kuruluyor..."
+echo "installing migrations..."
 mkdir -p "${INSTALL_SHARE}"
 rm -rf "${INSTALL_SHARE}/migrations"
 cp -a "${WORK_DIR}/migrations" "${INSTALL_SHARE}/migrations"
@@ -199,31 +207,31 @@ fi
 
 cat <<EOF
 
-Merhaba — Atellar v${INSTALLED_VERSION#v} kuruldu (linux/${ARCH}).
+Atellar v${INSTALLED_VERSION#v} installed (linux/${ARCH}).
 
-Kurulan dosyalar:
+Installed files:
   ${INSTALL_BIN}/atellar-api
   ${INSTALL_BIN}/atellar-agent
   ${INSTALL_BIN}/atelctl
   ${INSTALL_SHARE}/migrations
-  ${CONFIG_DIR}/          (config dizini)
-  ${LOG_DIR}/               (log dizini)
+  ${CONFIG_DIR}/          (config directory)
+  ${LOG_DIR}/             (log directory)
 
-Bundan sonra örnek adımlar:
+Next steps:
 
-  # 1) Control plane (PostgreSQL gerekli)
+  # 1) Control plane (requires PostgreSQL)
   export DATABASE_URL="postgresql://user:pass@localhost:5432/atellar_cp?sslmode=disable"
   export MIGRATIONS_PATH="${INSTALL_SHARE}/migrations"
   export PORT=8080
   export GRPC_PORT=9090
   atellar-api
 
-  # 2) Join token oluştur
+  # 2) Create join token
   curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \\
     -H "Content-Type: application/json" \\
     -d '{"single_use": true}'
 
-  # 3) Agent kur + cluster'a katıl
+  # 3) Install agent and join cluster
   atelctl agent install --auto-join \\
     --join-token <TOKEN> \\
     --name node-1 \\
@@ -233,10 +241,10 @@ Bundan sonra örnek adımlar:
     --http-port 8080 \\
     --grpc-port 9090
 
-  # 4) Cluster durumu
+  # 4) Cluster status
   atelctl cluster nodes list \\
     --control-plane-address <CP_HOST> --http-port 8080 --grpc-port 9090
 
-Dokümantasyon: https://github.com/${GITHUB_REPO}/blob/main/docs/getting-started.md
+Documentation: https://github.com/${GITHUB_REPO}/blob/main/docs/getting-started.md
 
 EOF

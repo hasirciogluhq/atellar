@@ -9,16 +9,25 @@ VERSION="${1:-}"
 
 VERSION_TAG="${VERSION#v}"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SCRIPT_DIR="${REPO_ROOT}/scripts/release"
 PKG_NAME="atellar_${VERSION_TAG}_linux"
 DIST="${REPO_ROOT}/dist/${PKG_NAME}"
+ASSETS_DIR="${REPO_ROOT}/dist/release-assets"
 
 PLATFORMS=(
   "linux amd64"
   "linux arm64"
 )
 
-rm -rf "${DIST}"
-mkdir -p "${DIST}/migrations"
+bake_release_script() {
+  local src="$1"
+  local dst="$2"
+  sed "s/^RELEASE_VERSION=\"\"$/RELEASE_VERSION=\"${VERSION_TAG}\"/" "${src}" >"${dst}"
+  chmod +x "${dst}"
+}
+
+rm -rf "${DIST}" "${ASSETS_DIR}"
+mkdir -p "${DIST}/migrations" "${ASSETS_DIR}"
 
 build_binaries() {
   local goos="$1"
@@ -42,9 +51,10 @@ for entry in "${PLATFORMS[@]}"; do
 done
 
 cp -a "${REPO_ROOT}/internal/db/migrations/." "${DIST}/migrations/"
-cp "${REPO_ROOT}/scripts/release/install.sh" "${DIST}/install.sh"
-cp "${REPO_ROOT}/scripts/release/uninstall.sh" "${DIST}/uninstall.sh"
-chmod +x "${DIST}/install.sh" "${DIST}/uninstall.sh"
+bake_release_script "${SCRIPT_DIR}/install.sh" "${DIST}/install.sh"
+bake_release_script "${SCRIPT_DIR}/uninstall.sh" "${DIST}/uninstall.sh"
+cp "${DIST}/install.sh" "${ASSETS_DIR}/install.sh"
+cp "${DIST}/uninstall.sh" "${ASSETS_DIR}/uninstall.sh"
 echo "${VERSION}" >"${DIST}/VERSION"
 
 OUT="${REPO_ROOT}/dist/${PKG_NAME}.tar.gz"
@@ -53,3 +63,4 @@ tar -czf "${OUT}" -C "${REPO_ROOT}/dist" "${PKG_NAME}"
 echo "created ${OUT}"
 echo "  amd64: ${DIST}/amd64/bin/"
 echo "  arm64: ${DIST}/arm64/bin/"
+echo "  release assets: ${ASSETS_DIR}/"

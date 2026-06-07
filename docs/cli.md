@@ -88,11 +88,11 @@ Each GitHub release includes `install.sh` and `uninstall.sh` (also under `script
 `install.sh` only installs binaries and migrations. Auto-detects `linux/amd64` or `linux/arm64` from the universal tarball. Does not start services.
 
 ```bash
-# latest release (auto-detect arch, no prompt when piped)
-curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
+# from a release tag (version baked in — no prompt)
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/download/v0.1.0/install.sh | sudo bash
 
-# specific version
-curl -fsSL .../install.sh | sudo bash -s -- --version v0.1.0
+# latest release
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
 
 # from extracted tarball
 sudo ./install.sh --local

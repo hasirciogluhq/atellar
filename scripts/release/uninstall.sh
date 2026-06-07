@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Set at release build time by package.sh (empty in repo).
+RELEASE_VERSION=""
+
 # Removes atellar-api, atellar-agent, atelctl, config, logs, migrations, systemd units.
 # Does NOT remove the node from control plane DB — evict via API separately.
 
@@ -65,4 +68,8 @@ fi
 rm -rf "${CONFIG_DIR}" "${LOG_DIR}" "${INSTALL_SHARE}"
 rm -f "${INSTALL_BIN}/atellar-api" "${INSTALL_BIN}/atellar-agent" "${INSTALL_BIN}/atelctl"
 
-echo "uninstall complete."
+if [[ -n "${RELEASE_VERSION}" ]]; then
+  echo "Atellar v${RELEASE_VERSION#v} uninstalled."
+else
+  echo "uninstall complete."
+fi

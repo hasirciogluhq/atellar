@@ -31,6 +31,6 @@ jobs:
         with:
           files: |
             dist/*.tar.gz
-            scripts/release/install.sh
-            scripts/release/uninstall.sh
+            dist/release-assets/install.sh
+            dist/release-assets/uninstall.sh
           generate_release_notes: true

@@ -33,16 +33,16 @@ Save the `token` value from the response — it is shown only once.
 Each GitHub release ships `install.sh` and a universal `atellar_<ver>_linux.tar.gz` with **amd64 + arm64** binaries. The installer auto-detects your architecture — it only copies files, does not start services.
 
 ```bash
-# latest release, auto arch (amd64/arm64)
-curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
+# release install.sh has version baked in — no prompt
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/download/v0.1.0/install.sh | sudo bash
 ```
 
-Or from an extracted tarball:
+Or from an extracted tarball (same baked install, uses bundled amd64/arm64 binaries):
 
 ```bash
 tar xzf atellar_0.1.0_linux.tar.gz
 cd atellar_0.1.0_linux
-sudo ./install.sh --local
+sudo ./install.sh
 ```
 
 ## 4. Start control plane
