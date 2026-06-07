@@ -6,6 +6,33 @@ Provides the control plane over HTTP (`:8080`) and gRPC (`:9090`).
 
 ## Startup
 
+### systemd (production)
+
+```bash
+# after release install.sh
+sudo atelctl server install \
+  --database-url "postgresql://postgres:secret@localhost:5432/atellar_cp?sslmode=disable" \
+  --migrations-path /usr/share/atellar/migrations \
+  --port 8080 --grpc-port 9090
+```
+
+Writes `/etc/atellar/api.env` and enables `atellar-api.service`. Config reference: `cmd/api/.env.example`.
+
+### Docker
+
+```bash
+docker compose up --build
+```
+
+Or standalone:
+
+```bash
+docker build -f cmd/api/Dockerfile -t atellar-api .
+docker run --env-file cmd/api/.env.example -p 8080:8080 -p 9090:9090 atellar-api
+```
+
+### Local dev
+
 ```bash
 export DATABASE_URL="postgresql://..."
 go run ./cmd/api

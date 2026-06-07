@@ -51,6 +51,7 @@ Deploy/delete containers: HTTP `POST/DELETE /api/v1/containers` via `pkg/client`
 Binary name: **atelctl** (`cmd/atelctl`). Structure: `atelctl <domain> <action>`.
 
 ```
+atelctl server install
 atelctl agent install|join|renew-key
 atelctl cluster nodes list|containers list
 ```
@@ -73,10 +74,18 @@ atelctl cluster nodes list|containers list
 
 - Required: `--control-plane-address`, `--http-port`, `--grpc-port`.
 
+### server install
+
+- Writes `/etc/atellar/api.env` (mode `0600`) and systemd unit `atellar-api.service`.
+- Required: `--database-url`. Defaults: `--migrations-path /usr/share/atellar/migrations`, `--port 8080`, `--grpc-port 9090`.
+- Env template: `cmd/api/.env.example`. Docker: `docker compose up --build` or `docker build -f cmd/api/Dockerfile -t atellar-api .` from repo root.
+
 ### Fixed paths (no CLI overrides)
 
 | Path | Value |
 |------|-------|
+| API env | `/etc/atellar/api.env` |
+| API migrations | `/usr/share/atellar/migrations` |
 | Agent binary | `/usr/local/bin/atellar-agent` |
 | Agent config | `/etc/atellar/agent.json` |
 | Agent logs | `/var/log/atellar` |

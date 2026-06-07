@@ -13,15 +13,20 @@
 | `CLUSTER_OVERLAY_CIDR` | `10.0.0.0/8` | Cluster overlay network |
 | `NODE_SUBNET_PREFIX_LEN` | `24` | Per-node subnet prefix |
 
-Example `.env`:
+Example env file: `cmd/api/.env.example`
+
+Production (systemd) — written by `atelctl server install` to `/etc/atellar/api.env` (mode `0600`):
 
 ```bash
-DATABASE_URL=postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable
-CLUSTER_OVERLAY_CIDR=10.0.0.0/8
-NODE_SUBNET_PREFIX_LEN=24
+sudo atelctl server install \
+  --database-url "postgresql://postgres:secret@localhost:5432/atellar_cp?sslmode=disable" \
+  --migrations-path /usr/share/atellar/migrations \
+  --port 8080 --grpc-port 9090
 ```
 
-`main.go` sets a local default if `DATABASE_URL` is empty (dev convenience).
+Docker: `docker compose up --build` or `docker build -f cmd/api/Dockerfile -t atellar-api .` with env from `cmd/api/.env.example`.
+
+`main.go` sets a local default if `DATABASE_URL` is empty (dev convenience only).
 
 ## Agent
 

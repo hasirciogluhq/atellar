@@ -2,6 +2,8 @@
 
 ```
 atelctl
+├── server
+│   └── install           # /etc/atellar/api.env + atellar-api.service
 ├── agent
 │   ├── install           # dirs + systemd (+ optional --auto-join → Join chain)
 │   ├── join              # register + write /etc/atellar/agent.json
@@ -27,9 +29,35 @@ Join writes all three into `/etc/atellar/agent.json`. Agent dials `address:grpc_
 
 | What | Path |
 |------|------|
+| API binary | `/usr/local/bin/atellar-api` |
+| API env (systemd) | `/etc/atellar/api.env` |
+| API migrations | `/usr/share/atellar/migrations` |
 | Agent binary | `/usr/local/bin/atellar-agent` |
 | Agent config | `/etc/atellar/agent.json` |
 | Agent logs | `/var/log/atellar` |
+
+## server install
+
+Requires root. Writes secrets to `/etc/atellar/api.env` and installs `atellar-api.service`.
+
+```bash
+sudo atelctl server install \
+  --database-url "postgresql://postgres:secret@localhost:5432/atellar_cp?sslmode=disable" \
+  --migrations-path /usr/share/atellar/migrations \
+  --port 8080 --grpc-port 9090
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--database-url` | *(required)* | PostgreSQL DSN |
+| `--migrations-path` | `/usr/share/atellar/migrations` | SQL migrations dir |
+| `--port` | `8080` | HTTP port |
+| `--grpc-port` | `9090` | gRPC port |
+| `--cluster-overlay-cidr` | `10.0.0.0/8` | Overlay CIDR |
+| `--node-subnet-prefix-len` | `24` | Per-node subnet prefix |
+| `--start` | `true` | `systemctl restart` after install |
+
+Env template: `cmd/api/.env.example`
 
 ## Required join flags
 

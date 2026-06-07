@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: atellar_cp
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d atellar_cp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: cmd/api/Dockerfile
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/atellar_cp?sslmode=disable
+      MIGRATIONS_PATH: /usr/share/atellar/migrations
+      PORT: "8080"
+      GRPC_PORT: "9090"
+      CLUSTER_OVERLAY_CIDR: 10.0.0.0/8
+      NODE_SUBNET_PREFIX_LEN: "24"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

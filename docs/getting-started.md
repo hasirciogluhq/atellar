@@ -48,12 +48,13 @@ sudo ./install.sh
 ## 4. Start control plane
 
 ```bash
-export DATABASE_URL="postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable"
-export MIGRATIONS_PATH=/usr/share/atellar/migrations
-export PORT=8080
-export GRPC_PORT=9090
-atellar-api
+sudo atelctl server install \
+  --database-url "postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable" \
+  --migrations-path /usr/share/atellar/migrations \
+  --port 8080 --grpc-port 9090
 ```
+
+Or with Docker: `docker compose up --build` (see `cmd/api/.env.example`).
 
 ## 5. Join agent
 

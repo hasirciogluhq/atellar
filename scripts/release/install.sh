@@ -220,11 +220,12 @@ Installed files:
 Next steps:
 
   # 1) Control plane (requires PostgreSQL)
-  export DATABASE_URL="postgresql://user:pass@localhost:5432/atellar_cp?sslmode=disable"
-  export MIGRATIONS_PATH="${INSTALL_SHARE}/migrations"
-  export PORT=8080
-  export GRPC_PORT=9090
-  atellar-api
+  atelctl server install \\
+    --database-url "postgresql://user:pass@localhost:5432/atellar_cp?sslmode=disable" \\
+    --migrations-path "${INSTALL_SHARE}/migrations" \\
+    --port 8080 --grpc-port 9090
+
+  # Or run manually: see cmd/api/.env.example
 
   # 2) Create join token
   curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \\
