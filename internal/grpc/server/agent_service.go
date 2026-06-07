@@ -169,13 +169,13 @@ func (s *AgentService) GetNodeWorkloads(ctx context.Context, _ *atellarv1.GetNod
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
-	nodeEntity, err := authn.MustNodeFromContext(authCtx)
+	nodeID, err := authn.ResolveNodeIDFromContext(authCtx)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
 
 	useCase := containerusecases.NewGetNodeWorkloadsUseCase(s.deps.Containers)
-	workloads, err := useCase.Execute(authCtx, nodeEntity.ID)
+	workloads, err := useCase.Execute(authCtx, nodeID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list workloads: %v", err)
 	}
@@ -192,7 +192,7 @@ func (s *AgentService) ReportContainerRuntime(ctx context.Context, req *atellarv
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
-	nodeEntity, err := authn.MustNodeFromContext(authCtx)
+	nodeID, err := authn.ResolveNodeIDFromContext(authCtx)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
@@ -215,7 +215,7 @@ func (s *AgentService) ReportContainerRuntime(ctx context.Context, req *atellarv
 
 	useCase := containerusecases.NewReportContainerRuntimeUseCase(s.deps.Containers, s.deps.ContainerPeerNotifier)
 	updated, err := useCase.Execute(authCtx, containerusecases.ReportContainerRuntimeInput{
-		NodeID:      nodeEntity.ID,
+		NodeID:      nodeID,
 		ContainerID: req.GetContainerId(),
 		Runtime:     runtimeInput,
 	})
@@ -231,13 +231,13 @@ func (s *AgentService) AllocateContainerOverlayIP(ctx context.Context, req *atel
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
-	nodeEntity, err := authn.MustNodeFromContext(authCtx)
+	nodeID, err := authn.ResolveNodeIDFromContext(authCtx)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
 
 	useCase := containerusecases.NewAllocateContainerOverlayIPUseCase(s.deps.Containers)
-	ip, err := useCase.Execute(authCtx, nodeEntity.ID, req.GetContainerId())
+	ip, err := useCase.Execute(authCtx, nodeID, req.GetContainerId())
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "%v", err)
 	}
@@ -245,7 +245,7 @@ func (s *AgentService) AllocateContainerOverlayIP(ctx context.Context, req *atel
 	if s.deps.ContainerPeerNotifier != nil {
 		found, _ := s.deps.Containers.GetContainerById(authCtx, req.GetContainerId())
 		if found != nil {
-			_ = s.deps.ContainerPeerNotifier.NotifyContainerEvent(ctx, agentregistry.PeerEventContainerUpdated, *found)
+			_ = s.deps.ContainerPeerNotifier.NotifyContainerEvent(authCtx, agentregistry.PeerEventContainerUpdated, *found)
 		}
 	}
 
@@ -257,13 +257,13 @@ func (s *AgentService) ReportNodeHardware(ctx context.Context, req *atellarv1.Re
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
-	nodeEntity, err := authn.MustNodeFromContext(authCtx)
+	nodeID, err := authn.ResolveNodeIDFromContext(authCtx)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
 
 	useCase := nodeusecases.NewUpdateNodeHardwareUseCase(s.deps.Nodes)
-	_, err = useCase.Execute(authCtx, nodeEntity.ID, nodeports.UpdateNodeHardwareInput{
+	_, err = useCase.Execute(authCtx, nodeID, nodeports.UpdateNodeHardwareInput{
 		CpuCores:       req.GetCpuCores(),
 		MemoryTotalMiB: req.GetMemoryTotalMib(),
 		DiskTotalGiB:   req.GetDiskTotalGib(),
