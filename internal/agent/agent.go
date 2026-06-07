@@ -50,6 +50,8 @@ func Run() error {
 		cfg.NodeID,
 		cfg.ContainerdSock,
 		cfg.ResolveBridgeName(),
+		cfg.OverlayIP,
+		cfg.OverlaySubnet,
 		session.GRPCClient(),
 		cfg.NodeAPIKey,
 	)

@@ -5,10 +5,11 @@ package netns
 import "errors"
 
 type Config struct {
-	ContainerID string
-	OverlayIP   string
-	BridgeName  string
-	GatewayIP   string
+	ContainerID       string
+	OverlayIP         string
+	NodeOverlayIP     string
+	NodeOverlaySubnet string
+	BridgeName        string
 }
 
 func Setup(Config) error {

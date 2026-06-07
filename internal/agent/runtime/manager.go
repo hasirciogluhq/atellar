@@ -7,31 +7,39 @@ import (
 	"sync"
 	"time"
 
-	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
 	"github.com/hasirciogluhq/atellar/internal/agent/netns"
+	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
 )
 
 const pollInterval = 15 * time.Second
 
 type Manager struct {
-	nodeID     string
-	cp         *CPClient
-	containerd *ContainerdRuntime
-	bridgeName string
+	nodeID            string
+	nodeOverlayIP     string
+	nodeOverlaySubnet string
+	cp                *CPClient
+	containerd        *ContainerdRuntime
+	bridgeName        string
 
 	triggerCh chan struct{}
 	mu        sync.Mutex
 	local     map[string]LocalContainer
 }
 
-func NewManager(nodeID, containerdSocket, bridgeName string, grpcClient atellarv1.AgentServiceClient, apiKey string) *Manager {
+func NewManager(
+	nodeID, containerdSocket, bridgeName, nodeOverlayIP, nodeOverlaySubnet string,
+	grpcClient atellarv1.AgentServiceClient,
+	apiKey string,
+) *Manager {
 	return &Manager{
-		nodeID:     nodeID,
-		cp:         NewCPClient(grpcClient, apiKey),
-		containerd: NewContainerdRuntime(containerdSocket, bridgeName, "/var/log/atellar"),
-		bridgeName: bridgeName,
-		triggerCh:  make(chan struct{}, 1),
-		local:      make(map[string]LocalContainer),
+		nodeID:            nodeID,
+		nodeOverlayIP:     nodeOverlayIP,
+		nodeOverlaySubnet: nodeOverlaySubnet,
+		cp:                NewCPClient(grpcClient, apiKey),
+		containerd:        NewContainerdRuntime(containerdSocket, bridgeName, "/var/log/atellar"),
+		bridgeName:        bridgeName,
+		triggerCh:         make(chan struct{}, 1),
+		local:             make(map[string]LocalContainer),
 	}
 }
 
@@ -147,9 +155,11 @@ func (m *Manager) runPipeline(ctx context.Context, w Workload) {
 	}
 
 	if err := netns.Setup(netns.Config{
-		ContainerID: w.ID,
-		OverlayIP:   overlayIP,
-		BridgeName:  m.bridgeName,
+		ContainerID:       w.ID,
+		OverlayIP:         overlayIP,
+		NodeOverlayIP:     m.nodeOverlayIP,
+		NodeOverlaySubnet: m.nodeOverlaySubnet,
+		BridgeName:        m.bridgeName,
 	}); err != nil {
 		m.fail(ctx, w, err)
 		return
