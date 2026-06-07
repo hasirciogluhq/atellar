@@ -188,6 +188,9 @@ func (m *Manager) runPipeline(ctx context.Context, w Workload) {
 }
 
 func (m *Manager) fail(ctx context.Context, w Workload, err error) {
+	netns.Teardown(w.ID)
+	_ = m.containerd.PurgeState(ctx, w.ID)
+
 	now := NowUnix()
 	restartCount := w.RestartCount + 1
 	status := "backoff"

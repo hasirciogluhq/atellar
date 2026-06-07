@@ -47,6 +47,8 @@ node overlay gateway ip is not configured on atellar0
 | `overlay_ip` missing in `agent.json` | Re-join or `PATCH /api/v1/nodes/:id/overlay`; restart agent |
 | Container `/32` + wrong gateway | Set `overlay_subnet` so container gets `/24` on same L2 segment as bridge |
 | Stale veth/netns from failed run | `ip link del <veth>` + `ip netns del <ctr_id>`; restart agent |
+| `snapshot "...": already exists` | Orphan containerd snapshot from partial create; agent purges on retry (`PurgeState`) — redeploy agent or `ctr -n atellar snapshots rm <id>` |
+| `args must not be empty` (runc) | Deploy specified image only; agent must apply `oci.WithImageConfig` so ENTRYPOINT/CMD come from the image |
 
 ## Quick diagnostics
 

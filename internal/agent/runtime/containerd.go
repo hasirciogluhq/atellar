@@ -12,6 +12,7 @@ import (
 	"github.com/containerd/containerd"
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/cio"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/typeurl/v2"
@@ -84,6 +85,10 @@ type LocalContainer struct {
 }
 
 func (r *ContainerdRuntime) RunContainer(ctx context.Context, w Workload, overlayIP string) (*LocalContainer, error) {
+	if err := r.PurgeState(ctx, w.ID); err != nil {
+		return nil, fmt.Errorf("purge stale state: %w", err)
+	}
+
 	ctx, client, err := r.withClient(ctx)
 	if err != nil {
 		return nil, err
@@ -110,10 +115,18 @@ func (r *ContainerdRuntime) RunContainer(ctx context.Context, w Workload, overla
 	if w.WorkingDir != "" {
 		specOpts = append(specOpts, oci.WithProcessCwd(w.WorkingDir))
 	}
-	if len(w.Entrypoint) > 0 || len(w.Command) > 0 {
+	switch {
+	case len(w.Command) > 0 && len(w.Entrypoint) == 0:
+		// Override image CMD only; keep image ENTRYPOINT.
+		specOpts = append(specOpts, oci.WithImageConfigArgs(image, w.Command))
+	case len(w.Entrypoint) > 0:
+		specOpts = append(specOpts, oci.WithImageConfig(image))
 		args := append([]string{}, w.Entrypoint...)
 		args = append(args, w.Command...)
 		specOpts = append(specOpts, oci.WithProcessArgs(args...))
+	default:
+		// Image-only deploy (e.g. nginx:alpine) — use ENTRYPOINT+CMD from image config.
+		specOpts = append(specOpts, oci.WithImageConfig(image))
 	}
 	for k, v := range w.Env {
 		specOpts = append(specOpts, oci.WithEnv([]string{fmt.Sprintf("%s=%s", k, v)}))
@@ -154,6 +167,11 @@ func (r *ContainerdRuntime) RunContainer(ctx context.Context, w Workload, overla
 }
 
 func (r *ContainerdRuntime) StopAndDelete(ctx context.Context, containerID string) error {
+	return r.PurgeState(ctx, containerID)
+}
+
+// PurgeState removes containerd container, task, and snapshot for idempotent retries.
+func (r *ContainerdRuntime) PurgeState(ctx context.Context, containerID string) error {
 	ctx, client, err := r.withClient(ctx)
 	if err != nil {
 		return err
@@ -161,23 +179,29 @@ func (r *ContainerdRuntime) StopAndDelete(ctx context.Context, containerID strin
 	defer client.Close()
 
 	ctr, err := client.LoadContainer(ctx, containerID)
-	if err != nil {
-		return nil
-	}
-
-	task, err := ctr.Task(ctx, nil)
 	if err == nil {
-		_ = task.Kill(ctx, syscall.SIGTERM)
-		waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		if exitCh, waitErr := task.Wait(waitCtx); waitErr == nil {
-			<-exitCh
+		if task, taskErr := ctr.Task(ctx, nil); taskErr == nil {
+			_ = task.Kill(ctx, syscall.SIGTERM)
+			waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			if exitCh, waitErr := task.Wait(waitCtx); waitErr == nil {
+				<-exitCh
+			}
+			cancel()
+			_ = task.Kill(ctx, syscall.SIGKILL)
+			_, _ = task.Delete(ctx)
 		}
-		cancel()
-		_ = task.Kill(ctx, syscall.SIGKILL)
-		_, _ = task.Delete(ctx)
+		if err := ctr.Delete(ctx, containerd.WithSnapshotCleanup); err != nil && !errdefs.IsNotFound(err) {
+			return err
+		}
+	} else if !errdefs.IsNotFound(err) {
+		return err
 	}
 
-	return ctr.Delete(ctx, containerd.WithSnapshotCleanup)
+	snapshotter := client.SnapshotService(containerd.DefaultSnapshotter)
+	if err := snapshotter.Remove(ctx, containerID); err != nil && !errdefs.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 func (r *ContainerdRuntime) TaskRunning(ctx context.Context, containerID string) (bool, int32, error) {
