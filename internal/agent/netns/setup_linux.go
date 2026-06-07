@@ -3,11 +3,15 @@
 package netns
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os/exec"
 	"strings"
 )
+
+const maxIfaceNameLen = 15
 
 type Config struct {
 	ContainerID string
@@ -25,8 +29,7 @@ func Setup(cfg Config) error {
 	}
 
 	ns := cfg.ContainerID
-	hostVeth := trimVethHost(cfg.ContainerID)
-	ctrVeth := trimVethCtr(cfg.ContainerID)
+	hostVeth, ctrVeth := vethPairNames(cfg.ContainerID)
 
 	if out, err := run("ip", "netns", "add", ns); err != nil {
 		if !strings.Contains(out, "File exists") {
@@ -68,7 +71,7 @@ func Setup(cfg Config) error {
 
 func Teardown(containerID string) {
 	ns := containerID
-	hostVeth := trimVethHost(containerID)
+	hostVeth, _ := vethPairNames(containerID)
 	_ = runIgnore("ip", "link", "del", hostVeth)
 	_ = runIgnore("ip", "netns", "del", ns)
 }
@@ -98,17 +101,16 @@ func gatewayFromBridge(bridge string) string {
 	return "10.0.0.1"
 }
 
-func trimVethHost(id string) string {
-	const max = 15
-	name := "veth" + strings.ReplaceAll(id, "_", "")
-	if len(name) > max {
-		return name[:max]
+// vethPairNames returns Linux ifnames (max 15 chars) derived from container ID.
+func vethPairNames(containerID string) (host, peer string) {
+	sum := sha256.Sum256([]byte(containerID))
+	// vh/vp prefix + 12 hex chars = 14 chars each
+	host = "vh" + hex.EncodeToString(sum[:6])
+	peer = "vp" + hex.EncodeToString(sum[6:12])
+	if len(host) > maxIfaceNameLen || len(peer) > maxIfaceNameLen {
+		panic("veth name longer than IFNAMSIZ")
 	}
-	return name
-}
-
-func trimVethCtr(id string) string {
-	return trimVethHost(id) + "p"
+	return host, peer
 }
 
 func run(args ...string) (string, error) {
