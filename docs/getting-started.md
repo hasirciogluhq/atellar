@@ -5,20 +5,51 @@
 - Go 1.25+
 - PostgreSQL
 - (On nodes) containerd — for agent container workloads
+- Node `private_ip` values that can reach each other for multi-node experiments (same underlay, VPC, or manually managed WireGuard)
 
-## 1. Start control plane
+## 1. Install binaries
 
 ```bash
-export DATABASE_URL="postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable"
-go run ./cmd/api
+# latest release
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
+```
+
+Installs:
+
+- `/usr/local/bin/atellar-api`
+- `/usr/local/bin/ateladm`
+- `/usr/local/bin/atelctl`
+- `/usr/local/bin/atelagent`
+- `/usr/share/atellar/migrations`
+
+## 2. Start control plane
+
+```bash
+sudo ateladm server install \
+  --database-url "postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable" \
+  --migrations-path /usr/share/atellar/migrations \
+  --port 8080 \
+  --grpc-port 9090
 ```
 
 - HTTP: `http://localhost:8080`
 - gRPC: `localhost:9090`
+- systemd unit: `atellar-api.service`
 
-Migrations run automatically.
+## 3. Configure atelctl context
 
-## 2. Create join token
+This creates `~/.atellar/config` as JSON.
+
+```bash
+atelctl config set-cluster local \
+  --control-plane-address 127.0.0.1 \
+  --http-port 8080 \
+  --grpc-port 9090
+atelctl config set-context local --cluster local
+atelctl config use-context local
+```
+
+## 4. Create join token
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
@@ -26,39 +57,23 @@ curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
   -d '{"single_use": true}'
 ```
 
-Save the `token` value from the response — it is shown only once.
+Save the `token` value from the response. It is shown only once.
 
-## 3. Install from release
-
-Each GitHub release ships `install.sh` and a universal `atellar_<ver>_linux.tar.gz` with **amd64 + arm64** binaries. The installer auto-detects your architecture — it only copies files, does not start services.
-
-```bash
-# release install.sh has version baked in — no prompt
-curl -fsSL https://github.com/hasirciogluhq/atellar/releases/download/v0.1.0/install.sh | sudo bash
-```
-
-Or from an extracted tarball (same baked install, uses bundled amd64/arm64 binaries):
-
-```bash
-tar xzf atellar_0.1.0_linux.tar.gz
-cd atellar_0.1.0_linux
-sudo ./install.sh
-```
-
-## 4. Start control plane
-
-```bash
-sudo ateladm server install \
-  --database-url "postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable" \
-  --migrations-path /usr/share/atellar/migrations \
-  --port 8080 --grpc-port 9090
-```
-
-Or with Docker: `docker compose up --build` (see `cmd/api/.env.example`).
-
-## 5. Join agent
+## 5. Join node
 
 `ateladm node install` creates dirs + systemd unit. With `--auto-join` it registers the node and writes `/etc/atellar/agent.json`.
+
+Run this on the node machine:
+
+```bash
+sudo ateladm node install --auto-join \
+  --join-token <PLAIN_TOKEN> \
+  --name node-1 \
+  --public-ip 203.0.113.10 \
+  --private-ip 10.0.0.5
+```
+
+If no atelctl context exists on the node, pass endpoint flags:
 
 ```bash
 sudo ateladm node install --auto-join \
@@ -71,15 +86,17 @@ sudo ateladm node install --auto-join \
   --private-ip 10.0.0.5
 ```
 
+`private-ip` is recorded on the node and is the intended data-plane address for multi-node routing. Use the LAN/VPC IP, or your WireGuard IP if you manage WireGuard manually.
+
 ## 6. Verify
 
 ```bash
 # List nodes
-atelctl cluster nodes list --control-plane-address localhost --http-port 8080 --grpc-port 9090
+atelctl cluster nodes list
 # or: curl http://localhost:8080/api/v1/nodes
 
 # Agent logs
-journalctl -u atelagent -f
+journalctl -u atellar-agent.service -f
 ```
 
 On successful connection, API logs show `agent connected node_id=...`.
@@ -96,16 +113,15 @@ curl -X POST http://localhost:8080/api/v1/containers \
   }'
 ```
 
-Target node receives `workload.dispatch`; peer nodes receive `container.scheduled` for overlay routes.
+Target node receives `workload.dispatch`; peer nodes receive `container.scheduled` for overlay route reconciliation.
 
 Verify on the control plane:
 
 ```bash
-atelctl cluster containers list \
-  --control-plane-address localhost --http-port 8080 --grpc-port 9090
+atelctl cluster containers list
 ```
 
-`STATUS` should be `running` with an `OVERLAY_IP`. If `failed`, check `ERROR` and run diagnostics on the scheduled node — see [networking.md](networking.md).
+`STATUS` should be `running` with an `OVERLAY_IP`. Same-node container networking is the reliable implemented path today. Cross-node container traffic is still experimental because Atellar does not create a tunnel and does not yet program `private_ip` as the route next hop. If the container is `failed`, check `ERROR` and run diagnostics on the scheduled node — see [networking.md](networking.md).
 
 Delete:
 

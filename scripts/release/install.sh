@@ -229,25 +229,24 @@ Next steps:
 
   # Or run manually: see cmd/api/.env.example
 
-  # 2) Create join token
+  # 2) Save client/admin context
+  atelctl config set-cluster default --control-plane-address <CP_HOST> --http-port 8080 --grpc-port 9090
+  atelctl config set-context default --cluster default
+  atelctl config use-context default
+
+  # 3) Create join token
   curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \\
     -H "Content-Type: application/json" \\
     -d '{"single_use": true}'
 
-  # 3) Install agent and join cluster
+  # 4) Install agent and join cluster
   ateladm node install --auto-join \\
     --join-token <TOKEN> \\
     --name node-1 \\
     --public-ip <PUBLIC_IP> \\
-    --private-ip <PRIVATE_IP> \\
-    --control-plane-address <CP_HOST> \\
-    --http-port 8080 \\
-    --grpc-port 9090
+    --private-ip <PRIVATE_IP>
 
-  # 4) Cluster status
-  atelctl config set-cluster default --control-plane-address <CP_HOST> --http-port 8080 --grpc-port 9090
-  atelctl config set-context default --cluster default
-  atelctl config use-context default
+  # 5) Cluster status
   atelctl cluster nodes list
 
 Documentation: https://github.com/${GITHUB_REPO}/blob/main/docs/getting-started.md

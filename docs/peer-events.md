@@ -91,7 +91,7 @@ Agent triggers workload reconcile immediately (in addition to 15s poll).
 }
 ```
 
-Peer nodes add routes to reach the container overlay IP.
+Peer nodes receive the event and run route reconciliation for the container overlay IP. Current Linux routing does not yet use peer `private_ip` as the next hop, so cross-node data-plane traffic remains experimental.
 
 ## Subnet reclaim
 

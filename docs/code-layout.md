@@ -1,89 +1,79 @@
 # Code Layout
 
-Dependency direction is **top → down**. Lower layers must not import domain modules.
+Dependency direction is from entrypoints and transports into application/domain code. Domain packages must not import transport, CLI, or agent runtime packages.
 
 ```
-cmd/                          # binaries (thin entrypoints)
-├── api/                      # control plane HTTP + wiring
-├── agent/                    # node agent binary
-└── atelctl/                  # operator CLI (agent + cluster)
+cmd/
+  api/              Control plane API server entrypoint
+  atelctl/          Client CLI entrypoint
+  ateladm/          Admin/operator CLI entrypoint
+  atelagent/        Node agent daemon entrypoint
 
 internal/
-├── config/                   # API server env config
-├── db/                       # migrations, sqlc queries, generated SQL
+  controlplane/
+    bootstrap/      Database, repositories, authn/authz, registry wiring
+    transport/http/ Gin HTTP handlers and middleware
 
-├── modules/                  # domain-driven control plane features
-│   ├── nodes/                # domain → usecases → ports → infrastructure
-│   └── containers/
+  grpc/
+    gen/            Generated AgentService protobuf code
+    server/         Control-plane gRPC implementation for atelagent
+    agentregistry/ Connected-agent registry and peer push
 
-├── cluster/                  # cluster-wide control plane logic (no agent code)
-│   └── ipam/                 # overlay subnet/IP allocation
+  modules/
+    nodes/          Node domain, use cases, ports, repositories
+    containers/     Container domain, use cases, ports, repositories
 
-├── transport/                # (conceptual) — today: internal/grpc/
-│   └── grpc/
-│       ├── gen/              # protobuf
-│       ├── server/           # AgentService (control plane side)
-│       └── agentregistry/    # connected agent streams + peer push
+  agent/            Code that runs inside atelagent
+    config/         /etc/atellar/agent.json schema
+    grpcclient/     Agent gRPC session and control-plane sync
+    runtime/        Containerd lifecycle manager
+    netns/          Linux netns/veth setup
+    overlay/        atellar0 bridge and route reconcile
+    hardware/       Node hardware reporter
 
-├── agent/                    # everything that runs ON a node
-│   ├── agent.go              # Run()
-│   ├── config/               # agent.json schema
-│   ├── grpcclient/           # gRPC session to control plane (agent-only)
-│   └── overlay/              # bridge, routes, reconcile (linux + stub)
-│       ├── manager.go        # reconcile loop
-│       ├── state.go          # desired routes (no domain imports)
-│       ├── cluster.go        # ClusterNode/Container DTOs + ClusterSyncer
-│       ├── link_linux.go     # ip route/link (linux)
-│       └── link_stub.go      # dev/macOS stub
+  cli/
+    atelctl/        Client command application services
+    ateladm/        Admin command application services
+
+  cluster/ipam/     Control-plane overlay subnet and IP allocation
+  config/           API server env config
+  db/               migrations, sqlc queries, generated SQL
+  platform/         authn, authz, pgutil, tokenhash, nodetoken
 
 pkg/
-  client/                     # global HTTP API client (atelctl, plugins)
+  client/           Public HTTP API client with its own DTOs
 
-├── platform/                 # shared primitives (authn, pgutil, hashes)
-│   ├── authn/
-│   ├── pgutil/
-│   ├── tokenhash/
-│   └── nodetoken/
-
-└── atelctl/                  # atelctl command implementations
-    ├── agent/                # install, join, renew-key
-    └── cluster/              # nodes/containers list
+api/proto/          Source protobuf definitions
+scripts/release/   Build/install/uninstall release scripts
 ```
 
-## Dependency rules
+## Binary Responsibilities
 
-| Layer | May import | Must NOT import |
+| Binary | Package | Role |
+|--------|---------|------|
+| `atellar-api` | `cmd/api` | Control plane HTTP and gRPC server |
+| `atelctl` | `cmd/atelctl` | User/client CLI, contexts, cluster inspection |
+| `ateladm` | `cmd/ateladm` | Server install and node install/join operations |
+| `atelagent` | `cmd/atelagent` | Node daemon: gRPC, containerd, netns, overlay |
+
+## Dependency Rules
+
+| Layer | May import | Must not import |
 |-------|------------|-----------------|
-| `cmd/*` | `internal/*` | — |
-| `modules/*` | `platform/*`, `db/*`, `cluster/*` | `agent/*`, `grpc/server` |
-| `cluster/ipam` | stdlib only | `modules/*`, `agent/*` |
-| `agent/overlay` | stdlib only | `modules/*`, `client/*` |
-| `agent/grpcclient` | `agent/config`, `agent/overlay`, `platform/authn`, `grpc/gen` | `modules/*` |
-| `grpc/server` | `modules/*`, `platform/*`, `grpc/agentregistry` | `agent/*` |
-| `pkg/client` | stdlib, jwt | `internal/*` domain (uses own DTOs) |
+| `cmd/*` | `internal/*`, `pkg/*` | Business logic directly |
+| `controlplane/transport/*` | `controlplane/bootstrap`, `modules/*`, `platform/*` | `agent/*`, `cli/*` |
+| `grpc/server` | `modules/*`, `platform/*`, `grpc/agentregistry` | `agent/*`, `cli/*` |
+| `modules/*` | `platform/*`, `db/*`, `cluster/*` | `agent/*`, transport packages |
+| `agent/*` | `grpc/gen`, `platform/authn`, agent-local packages | `modules/*`, control-plane repositories |
+| `cli/*` | `pkg/client`, install/join helpers | `controlplane/transport/*` |
+| `pkg/client` | stdlib, jwt | `internal/*` |
 
-## What was removed
-
-- `internal/pkg/*` — dumping ground; split by responsibility
-- `internal/nodes/` — duplicate of `modules/nodes`
-- `internal/network/` — empty stub
-
-## Agent vs HTTP
+## Transport Split
 
 | Component | Transport |
 |-----------|-----------|
-| `agent/grpcclient` | gRPC only |
-| `agent/overlay` | local `ip` commands (linux) |
-| `pkg/client` | HTTP (atelctl, external plugins) |
-| `cmd/api` routes | HTTP REST |
+| `atelctl` / `ateladm` | HTTP via `pkg/client` |
+| `atelagent` | gRPC to `AgentService` |
+| Container traffic | Linux bridge/netns plus node-to-node routed reachability |
 
-## Agent networking (`internal/agent/`)
-
-```
-agent/
-  overlay/          # node overlay bridge + cluster routes (linux)
-  netns/            # per-container veth, netns, default route (linux)
-  vmnet/            # optional VM bridge/tap (future)
-```
-
-Do **not** put Linux network code under `pkg/` or `platform/`. Those stay agent-local or `cluster/` for control-plane IPAM only.
+Do not put Linux networking code under `pkg/` or `platform/`. It belongs under `internal/agent/`.

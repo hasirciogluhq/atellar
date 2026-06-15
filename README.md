@@ -5,22 +5,35 @@ Distributed container orchestration platform. Consists of a **control plane** (A
 ## Quick start
 
 ```bash
-# 1. Control plane (requires PostgreSQL)
-export DATABASE_URL="postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable"
-go run ./cmd/api
+# 1. Install release binaries and migrations
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
 
-# 2. Create join token
+# 2. Install and start the control plane (requires PostgreSQL)
+sudo ateladm server install \
+  --database-url "postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable" \
+  --migrations-path /usr/share/atellar/migrations \
+  --port 8080 \
+  --grpc-port 9090
+
+# 3. Save a local client context
+atelctl config set-cluster local --control-plane-address 127.0.0.1 --http-port 8080 --grpc-port 9090
+atelctl config set-context local --cluster local
+atelctl config use-context local
+
+# 4. Create join token
 curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
   -H "Content-Type: application/json" \
   -d '{"single_use": true}'
 
-# 3. Install binaries from GitHub release (auto amd64/arm64)
-curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
+# 5. Join a node from that node machine
+sudo ateladm node install --auto-join \
+  --join-token <TOKEN> \
+  --name node-1 \
+  --public-ip <PUBLIC_IP> \
+  --private-ip <PRIVATE_OR_WG_IP>
 
-# 4. Start control plane, then join agent (see docs/getting-started.md)
-export DATABASE_URL="postgresql://..."
-export MIGRATIONS_PATH=/usr/share/atellar/migrations
-atellar-api
+# 6. Inspect from your client machine
+atelctl cluster nodes list
 ```
 
 ## Components
@@ -46,6 +59,8 @@ ateladm ──manage─────►     ▲
 ```
 
 On node register, the cluster automatically assigns an **overlay subnet** (`/24`) and **overlay IP**. When containers or nodes change, events are pushed to connected peer nodes.
+
+Current networking creates the per-node bridge, container netns/veth pairs, overlay IPAM, and peer route reconciliation triggers. Atellar does **not** create VXLAN, WireGuard, or another node-to-node tunnel. Cross-node container traffic should be treated as experimental until route reconciliation uses node `private_ip` as the data-plane next hop. For multi-node tests, keep node `private_ip` values mutually reachable; use same LAN/VPC addresses or WireGuard IPs that you manage outside Atellar.
 
 ## Documentation
 

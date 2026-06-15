@@ -93,6 +93,10 @@ Service: `AgentService`
 | `Connect` | bidi stream | Agent connection, heartbeat, peer push |
 | `RenewNodeAPIKey` | unary | API key renewal |
 | `GetClusterNetworkState` | unary | Cluster nodes/containers for overlay reconcile |
+| `GetNodeWorkloads` | unary | Workloads assigned to authenticated node |
+| `ReportContainerRuntime` | unary | Container runtime/status report from node |
+| `AllocateContainerOverlayIP` | unary | Allocate overlay IP from authenticated node pool |
+| `ReportNodeHardware` | unary | Node hardware report |
 
 On connect, the agent is registered in `AgentRegistry`; on disconnect, unregistered.
 
@@ -125,6 +129,7 @@ If overlay changes, peers receive `node.updated` (with `previous_overlay_*` fiel
 | `NodeRepository` | Node CRUD, overlay, tokens |
 | `ContainerRepository` | Containers + overlay pool |
 | `NodeAuth` | Bearer API key validation |
+| `Authz` | Scope-based authorization decisions |
 | `AgentRegistry` | Connected agent streams |
 | `NodePeerNotifier` | Node peer events |
 | `ContainerPeerNotifier` | Container peer events |
@@ -132,7 +137,7 @@ If overlay changes, peers receive `node.updated` (with `previous_overlay_*` fiel
 
 ## Auth note
 
-Most HTTP endpoints are currently unauthenticated (MVP). Production should add admin/service account auth. gRPC and `me/api-key/renew` are protected by node API key.
+Most HTTP endpoints are currently unauthenticated (MVP). Production should add admin/service account auth. gRPC and `me/api-key/renew` are protected by node API key and scope-based authz.
 
 ## Related code
 

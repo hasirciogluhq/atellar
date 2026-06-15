@@ -1,6 +1,6 @@
 # Overlay & Container Networking
 
-Linux agent networking model: per-node bridge (`atellar0`) + veth pairs into per-container network namespaces. Cross-node reachability uses host routes on the bridge/VXLAN overlay (see `internal/agent/overlay/`).
+Linux agent networking model: per-node bridge (`atellar0`) + veth pairs into per-container network namespaces.
 
 ## IPAM layout
 
@@ -12,6 +12,16 @@ Linux agent networking model: per-node bridge (`atellar0`) + veth pairs into per
 | Container IP | `overlay_ip_pool` on that node | `10.0.2.50` |
 
 On join/register, the control plane assigns `overlay_ip` + `overlay_subnet` and writes them to `/etc/atellar/agent.json`. The overlay manager applies the node IP on `atellar0`; container netns setup uses the same values as the default gateway.
+
+Current implementation status:
+
+- Creates and reconciles the local bridge address.
+- Creates per-container netns/veth wiring on the scheduled node.
+- Receives peer node/container events and runs route reconciliation.
+- Does **not** create VXLAN, WireGuard, or any other node-to-node tunnel.
+- Does **not yet** program `private_ip` as the cross-node next hop. Multi-node overlay traffic is experimental until this route manager is completed.
+
+For multi-node experiments, node `private_ip` values should still be mutually reachable because that is the intended data-plane address. If nodes are not on the same routable underlay, create WireGuard yourself and join each node with its WireGuard IP as `private_ip`.
 
 ## Per-container netns setup
 
@@ -62,16 +72,15 @@ ip route
 # Agent config
 cat /etc/atellar/agent.json | jq '{overlay_ip, overlay_subnet, bridge_name}'
 
-# Container list (includes ERROR column)
-atelctl cluster containers list \
-  --control-plane-address <cp> --http-port 8080 --grpc-port 9090
+# Container list (uses current atelctl context)
+atelctl cluster containers list
 
 # Per-container netns (replace ctr ID)
 ip netns exec ctr_<id> ip addr
 ip netns exec ctr_<id> ip route
 
-# Agent logs
-journalctl -u atelagent -n 100 --no-pager
+# Agent logs (systemd unit)
+journalctl -u atellar-agent.service -n 100 --no-pager
 ```
 
 Expected healthy state on node `10.0.2.1/24`:
@@ -92,7 +101,7 @@ default via 10.0.2.1 dev vh...
 ```bash
 sudo ip link del vh<hash> 2>/dev/null || true   # host veth name from ip link | grep vh
 sudo ip netns del ctr_<container_id> 2>/dev/null || true
-sudo systemctl restart atelagent
+sudo systemctl restart atellar-agent.service
 ```
 
 Delete the failed workload from the control plane, then redeploy.
@@ -125,12 +134,11 @@ Check: both containers in same `overlay_subnet`, bridge forwarding (`bridge link
 
 ```
 Node1 container (<ip1>) → Node2 container (<ip2>) ping atamıyor.
-VXLAN VNI=<vni>, her node'da vtep0 var.
-FDB: bridge fdb show dev vtep0 → [...]
-Underlay ping between nodes works.
+Each node has an overlay subnet and atellar0 is up.
+Node private_ip values are expected to be mutually reachable, but the current agent does not yet use them as route next hops.
 ```
 
-Check: peer routes on each node (`ip route get <remote_container_ip>`), container routes on CP (`container.scheduled` events), FDB entries for remote VTEP MACs.
+Check: node-to-node underlay reachability first (`ping <peer_private_ip>`), then check whether the current agent route state can resolve the remote container (`ip route get <remote_container_ip>`) and whether control-plane events were delivered (`container.scheduled`). If using WireGuard, verify the peer IP used at join is the WireGuard IP and AllowedIPs include the peer node/container ranges. If the route next hop is not the peer `private_ip`, this is a known current limitation rather than an operator setup issue.
 
 ### 4. Stale netns / veth after terminate
 
@@ -163,6 +171,6 @@ Adjust source CIDR and `-o` interface to match your deployment.
 |------|------|
 | `internal/agent/netns/setup_linux.go` | veth, netns, default route |
 | `internal/agent/runtime/manager.go` | pipeline; passes node overlay into netns |
-| `internal/agent/overlay/` | bridge IP, peer routes, VXLAN reconcile |
+| `internal/agent/overlay/` | bridge IP and peer route reconcile |
 | `internal/cluster/ipam/` | control-plane subnet + container IP allocation |
 | `docs/peer-events.md` | `node.*` / `container.scheduled` events |

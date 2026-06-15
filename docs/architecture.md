@@ -10,12 +10,16 @@ Atellar consists of two layers:
 ```
 ┌─────────────┐     HTTP      ┌──────────────────┐
 │  atelctl    │──────────────►│   API Server     │
-│  agent join │   register    │  :8080 / :9090   │
+│ cluster ops │    query      │  :8080 / :9090   │
 └─────────────┘               └────────┬─────────┘
+┌─────────────┐     HTTP               │
+│  ateladm    │──────────────► register│
+│ node join   │                        │
+└─────────────┘                        │
                                        │
 ┌─────────────┐     gRPC bidi          │ PostgreSQL
-│ atellar-    │◄──────────────────────┤
-│ agent       │  Connect + heartbeat   │
+│ atelagent   │◄──────────────────────┤
+│             │  Connect + heartbeat   │
 └─────────────┘                        │
        ▲                               │
        │ reconcile.trigger             │
@@ -37,14 +41,14 @@ Atellar consists of two layers:
 - gRPC `Connect` stream (heartbeat, RPC receive)
 - Automatic API key renewal (7 days before expiry)
 - Apply peer events and reconcile overlay bridge/routes (Linux: `ip` commands)
-- Communicate with control plane **only via gRPC** (no HTTP)
+- Runtime communication with control plane uses gRPC. Registration is performed before daemon start by `ateladm node join` over HTTP.
 
 ## Auth model
 
 | Phase | Credential | Usage |
 |-------|------------|-------|
 | Before registration | Join token (plain, shown once) | `POST /nodes/register?token=` |
-| After registration | Node API key (Bearer, 90-day TTL) | gRPC stream, `renew-api-key` |
+| After registration | Node API key (Bearer, 90-day TTL) | gRPC stream, API key renewal |
 
 API keys are stored in the DB as SHA-256 hashes.
 
@@ -58,6 +62,8 @@ API keys are stored in the DB as SHA-256 hashes.
 
 Per-node bridge + per-container veth/netns: [networking.md](networking.md).
 
+Atellar does not create WireGuard or VXLAN. Current code reconciles local bridge state and peer route events, but cross-node traffic is still experimental because the Linux route manager does not yet use peer `private_ip` as the next hop.
+
 ## Infrastructure wiring
 
 `internal/controlplane/bootstrap/infrasturcture.go` creates on startup:
@@ -67,6 +73,7 @@ Database → sqlc Queries
   → NodeRepository
   → ContainerRepository
   → NodeAuthenticator
+  → Authorizer
   → AgentRegistry (connected gRPC streams)
   → PeerNotifier (node + container events)
   → OverlayProvisioner (IPAM + pool seed)

@@ -2,14 +2,14 @@
 
 Binary: `atelagent` (`cmd/atelagent`)
 
-Node-side process. Reads `/etc/atellar/agent.json` only — no env vars, no HTTP to control plane.
+Node-side process. Reads `/etc/atellar/agent.json` only. Runtime communication with the control plane is gRPC; node registration is done separately by `ateladm node join` over HTTP before the daemon starts.
 
 ## Connection
 
 | Field | Use |
 |-------|-----|
 | `control_plane_address` | Host/IP |
-| `http_port` | Not used by agent (atelctl / join register) |
+| `http_port` | Written for tooling; atelagent runtime does not use it |
 | `grpc_port` | Agent dials `address:grpc_port` |
 
 ```go
@@ -63,7 +63,7 @@ On `DELETE /containers/:id`: CP sets `removed` → agent terminates, cleans netn
 }
 ```
 
-## Node setup (atelctl)
+## Node setup (ateladm)
 
 - `ateladm node install` — dirs + systemd
 - `ateladm node join` — writes config (address + ports + credentials)

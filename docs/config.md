@@ -36,6 +36,36 @@ Details: [agent.md](agent.md)
 
 **Container networking requires** `overlay_ip` and `overlay_subnet` (set at join/register). They must match the bridge address on `bridge_name` (default `atellar0`). Troubleshooting: [networking.md](networking.md).
 
+## atelctl client config
+
+Default path: `~/.atellar/config`. Override with `--config`.
+
+```json
+{
+  "current_context": "local",
+  "clusters": {
+    "local": {
+      "address": "127.0.0.1",
+      "http_port": 8080,
+      "grpc_port": 9090
+    }
+  },
+  "contexts": {
+    "local": {
+      "cluster": "local"
+    }
+  }
+}
+```
+
+Create it with:
+
+```bash
+atelctl config set-cluster local --control-plane-address 127.0.0.1 --http-port 8080 --grpc-port 9090
+atelctl config set-context local --cluster local
+atelctl config use-context local
+```
+
 ## Post-join config example
 
 ```json

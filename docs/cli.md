@@ -3,9 +3,9 @@
 ```
 atelctl
 ├── cluster
-    ├── nodes list
-    └── containers list
-├── config
+│   ├── nodes list
+│   └── containers list
+└── config
     ├── set-cluster
     ├── set-context
     ├── use-context
@@ -30,7 +30,7 @@ Address and ports can be stored in an atelctl context, so day-to-day commands do
 | Flag | Description |
 |------|-------------|
 | `--control-plane-address` | Host or IP (no scheme) |
-| `--http-port` | HTTP API port (atelctl → register, list) |
+| `--http-port` | HTTP API port (atelctl/ateladm) |
 | `--grpc-port` | gRPC port (agent stream) |
 
 Explicit endpoint flags still work and override the current context. `ateladm node join` writes all three resolved values into `/etc/atellar/agent.json`. atelagent dials `address:grpc_port`; atelctl HTTP uses `http://address:http_port`.
@@ -60,6 +60,7 @@ atelctl config get-contexts
 | API env (systemd) | `/etc/atellar/api.env` |
 | API migrations | `/usr/share/atellar/migrations` |
 | Agent binary | `/usr/local/bin/atelagent` |
+| Agent systemd unit | `/etc/systemd/system/atellar-agent.service` |
 | Agent config | `/etc/atellar/agent.json` |
 | Agent logs | `/var/log/atellar` |
 
@@ -106,8 +107,6 @@ Endpoint flags are optional when a current context is configured:
 ## Flow
 
 ```bash
-sudo cp atelagent /usr/local/bin/
-
 sudo ateladm node install \
   --auto-join \
   --join-token <TOKEN> \
@@ -135,7 +134,7 @@ atelctl cluster containers list
 
 Each GitHub release includes `install.sh` and `uninstall.sh` (also under `scripts/release/` in the repo).
 
-`install.sh` only installs binaries and migrations. Auto-detects `linux/amd64` or `linux/arm64` from the universal tarball. Does not start services.
+`install.sh` only installs binaries and migrations. Auto-detects `linux/amd64` or `linux/arm64` from the universal tarball. It does not start services.
 
 ```bash
 # from a release tag (version baked in — no prompt)
@@ -147,11 +146,11 @@ curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/ins
 # from extracted tarball
 sudo ./install.sh --local
 
-# remove everything (api, agent, ateladm, atelctl, config, migrations, workloads)
+# remove everything (api, agent service, ateladm, atelctl, config, migrations, workloads)
 sudo ./uninstall.sh --yes
 ```
 
-`uninstall.sh` does **not** delete the node from control plane PostgreSQL — use evict API on the CP.
+`uninstall.sh` does **not** delete the node from control plane PostgreSQL — use the evict API on the control plane.
 
 Maintainers: push a `v*` tag — GitHub Actions builds `atellar_<ver>_linux.tar.gz` (amd64 + arm64 inside) and publishes `install.sh`. Local: `./scripts/release/build-all.sh v0.1.0`.
 
