@@ -48,7 +48,7 @@ sudo ./install.sh
 ## 4. Start control plane
 
 ```bash
-sudo atelctl server install \
+sudo ateladm server install \
   --database-url "postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable" \
   --migrations-path /usr/share/atellar/migrations \
   --port 8080 --grpc-port 9090
@@ -58,10 +58,10 @@ Or with Docker: `docker compose up --build` (see `cmd/api/.env.example`).
 
 ## 5. Join agent
 
-`atelctl agent install` creates dirs + systemd unit. With `--auto-join` it registers the node and writes `/etc/atellar/agent.json`.
+`ateladm node install` creates dirs + systemd unit. With `--auto-join` it registers the node and writes `/etc/atellar/agent.json`.
 
 ```bash
-sudo atelctl agent install --auto-join \
+sudo ateladm node install --auto-join \
   --join-token <PLAIN_TOKEN> \
   --control-plane-address <cp-host> \
   --http-port 8080 \
@@ -79,7 +79,7 @@ atelctl cluster nodes list --control-plane-address localhost --http-port 8080 --
 # or: curl http://localhost:8080/api/v1/nodes
 
 # Agent logs
-journalctl -u atellar-agent -f
+journalctl -u atelagent -f
 ```
 
 On successful connection, API logs show `agent connected node_id=...`.

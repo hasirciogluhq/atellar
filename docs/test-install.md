@@ -1,1 +1,1 @@
-sudo atelctl agent install --auto-join --join-token=1234 --name=vm3 --public-ip=192.168.139.119 --private-ip=192.168.139.119 --control-plane-address=api.atellar.orb.local --http-port=8080 --grpc-port=9090
+sudo ateladm node install --auto-join --join-token=1234 --name=vm3 --public-ip=192.168.139.119 --private-ip=192.168.139.119 --control-plane-address=api.atellar.orb.local --http-port=8080 --grpc-port=9090

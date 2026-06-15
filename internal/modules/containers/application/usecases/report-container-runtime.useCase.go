@@ -20,9 +20,9 @@ func NewReportContainerRuntimeUseCase(containers ports.ContainerRepositoryInterf
 }
 
 type ReportContainerRuntimeInput struct {
-	NodeID       string
-	ContainerID  string
-	Runtime      ports.UpdateContainerRuntimeInput
+	NodeID      string
+	ContainerID string
+	Runtime     ports.UpdateContainerRuntimeInput
 }
 
 func (u *ReportContainerRuntimeUseCase) Execute(ctx context.Context, input ReportContainerRuntimeInput) (*container.Entity, error) {

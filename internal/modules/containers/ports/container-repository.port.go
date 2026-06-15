@@ -62,8 +62,8 @@ type CreateContainerEventInput struct {
 }
 
 type NodeResourceUsage struct {
-	RunningCount int
-	TotalCPU     float64
+	RunningCount   int
+	TotalCPU       float64
 	TotalMemoryMiB int32
 }
 

@@ -15,11 +15,11 @@ import (
 const maxIfaceNameLen = 15
 
 type Config struct {
-	ContainerID      string
-	OverlayIP        string
-	NodeOverlayIP    string
+	ContainerID       string
+	OverlayIP         string
+	NodeOverlayIP     string
 	NodeOverlaySubnet string
-	BridgeName       string
+	BridgeName        string
 }
 
 func Setup(cfg Config) error {

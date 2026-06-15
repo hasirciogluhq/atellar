@@ -40,7 +40,8 @@ build_binaries() {
     cd "${REPO_ROOT}"
     export GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0
     go build -trimpath -ldflags="-s -w" -o "${out_dir}/atellar-api" ./cmd/api
-    go build -trimpath -ldflags="-s -w" -o "${out_dir}/atellar-agent" ./cmd/agent
+    go build -trimpath -ldflags="-s -w" -o "${out_dir}/atelagent" ./cmd/atelagent
+    go build -trimpath -ldflags="-s -w" -o "${out_dir}/ateladm" ./cmd/ateladm
     go build -trimpath -ldflags="-s -w" -o "${out_dir}/atelctl" ./cmd/atelctl
   )
 }

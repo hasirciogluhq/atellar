@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hasirciogluhq/atellar/internal/cluster/ipam"
 	"github.com/hasirciogluhq/atellar/internal/modules/containers/ports"
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/domain/node"
 	nodeports "github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
-	"github.com/hasirciogluhq/atellar/internal/cluster/ipam"
 )
 
 type OverlayProvisioner struct {

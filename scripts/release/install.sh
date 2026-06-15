@@ -32,7 +32,7 @@ usage() {
   cat <<'EOF'
 Atellar install.sh
 
-Installs atellar-api, atellar-agent, atelctl and DB migrations.
+Installs atellar-api, atelagent, ateladm, atelctl and DB migrations.
 Auto-detects linux/amd64 or linux/arm64 from the universal release tarball.
 Does not start any service — configure and run manually after install.
 
@@ -182,14 +182,15 @@ fi
 BIN_DIR="$(resolve_bin_dir "${WORK_DIR}" "${ARCH}")"
 echo "binary source: ${BIN_DIR}"
 
-for bin in atellar-api atellar-agent atelctl; do
+for bin in atellar-api atelagent ateladm atelctl; do
   [[ -f "${BIN_DIR}/${bin}" ]] || die "binary not found: ${BIN_DIR}/${bin}"
 done
 [[ -d "${WORK_DIR}/migrations" ]] || die "migrations not found: ${WORK_DIR}/migrations"
 
 echo "installing binaries (linux/${ARCH})..."
 install -m 0755 "${BIN_DIR}/atellar-api" "${INSTALL_BIN}/atellar-api"
-install -m 0755 "${BIN_DIR}/atellar-agent" "${INSTALL_BIN}/atellar-agent"
+install -m 0755 "${BIN_DIR}/atelagent" "${INSTALL_BIN}/atelagent"
+install -m 0755 "${BIN_DIR}/ateladm" "${INSTALL_BIN}/ateladm"
 install -m 0755 "${BIN_DIR}/atelctl" "${INSTALL_BIN}/atelctl"
 
 echo "installing migrations..."
@@ -211,7 +212,8 @@ Atellar v${INSTALLED_VERSION#v} installed (linux/${ARCH}).
 
 Installed files:
   ${INSTALL_BIN}/atellar-api
-  ${INSTALL_BIN}/atellar-agent
+  ${INSTALL_BIN}/atelagent
+  ${INSTALL_BIN}/ateladm
   ${INSTALL_BIN}/atelctl
   ${INSTALL_SHARE}/migrations
   ${CONFIG_DIR}/          (config directory)
@@ -220,7 +222,7 @@ Installed files:
 Next steps:
 
   # 1) Control plane (requires PostgreSQL)
-  atelctl server install \\
+  ateladm server install \\
     --database-url "postgresql://user:pass@localhost:5432/atellar_cp?sslmode=disable" \\
     --migrations-path "${INSTALL_SHARE}/migrations" \\
     --port 8080 --grpc-port 9090
@@ -233,7 +235,7 @@ Next steps:
     -d '{"single_use": true}'
 
   # 3) Install agent and join cluster
-  atelctl agent install --auto-join \\
+  ateladm node install --auto-join \\
     --join-token <TOKEN> \\
     --name node-1 \\
     --public-ip <PUBLIC_IP> \\
@@ -243,8 +245,10 @@ Next steps:
     --grpc-port 9090
 
   # 4) Cluster status
-  atelctl cluster nodes list \\
-    --control-plane-address <CP_HOST> --http-port 8080 --grpc-port 9090
+  atelctl config set-cluster default --control-plane-address <CP_HOST> --http-port 8080 --grpc-port 9090
+  atelctl config set-context default --cluster default
+  atelctl config use-context default
+  atelctl cluster nodes list
 
 Documentation: https://github.com/${GITHUB_REPO}/blob/main/docs/getting-started.md
 

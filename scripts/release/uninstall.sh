@@ -4,7 +4,7 @@ set -euo pipefail
 # Set at release build time by package.sh (empty in repo).
 RELEASE_VERSION=""
 
-# Removes atellar-api, atellar-agent, atelctl, config, logs, migrations, systemd units.
+# Removes atellar-api, atelagent, ateladm, atelctl, config, logs, migrations, systemd units.
 # Does NOT remove the node from control plane DB — evict via API separately.
 
 INSTALL_BIN="/usr/local/bin"
@@ -12,7 +12,7 @@ INSTALL_SHARE="/usr/share/atellar"
 CONFIG_DIR="/etc/atellar"
 LOG_DIR="/var/log/atellar"
 API_UNIT="/etc/systemd/system/atellar-api.service"
-AGENT_UNIT="/etc/systemd/system/atellar-agent.service"
+AGENT_UNIT="/etc/systemd/system/atelagent.service"
 BRIDGE_NAME="atellar0"
 CONTAINERD_NS="atellar"
 
@@ -35,12 +35,12 @@ done
 require_root
 
 if [[ "${YES}" -ne 1 ]]; then
-  echo "this will remove atellar-api, atellar-agent, atelctl, config, logs, migrations, and local workloads."
+  echo "this will remove atellar-api, atelagent, ateladm, atelctl, config, logs, migrations, and local workloads."
   read -r -p "continue? [y/N] " reply
   [[ "${reply}" =~ ^[Yy]$ ]] || die "aborted"
 fi
 
-for svc in atellar-agent atellar-api; do
+for svc in atelagent atellar-api; do
   systemctl stop "${svc}" 2>/dev/null || true
   systemctl disable "${svc}" 2>/dev/null || true
 done
@@ -66,7 +66,7 @@ if command -v ip >/dev/null 2>&1 && ip link show "${BRIDGE_NAME}" >/dev/null 2>&
 fi
 
 rm -rf "${CONFIG_DIR}" "${LOG_DIR}" "${INSTALL_SHARE}"
-rm -f "${INSTALL_BIN}/atellar-api" "${INSTALL_BIN}/atellar-agent" "${INSTALL_BIN}/atelctl"
+rm -f "${INSTALL_BIN}/atellar-api" "${INSTALL_BIN}/atelagent" "${INSTALL_BIN}/ateladm" "${INSTALL_BIN}/atelctl"
 
 if [[ -n "${RELEASE_VERSION}" ]]; then
   echo "Atellar v${RELEASE_VERSION#v} uninstalled."

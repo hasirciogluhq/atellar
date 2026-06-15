@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	nodeStatusEvicted   = "evicted"
-	nodeStatusEvicting  = "evicting"
-	nodeStatusDown      = "down"
+	nodeStatusEvicted        = "evicted"
+	nodeStatusEvicting       = "evicting"
+	nodeStatusDown           = "down"
 	containerStatusScheduled = "scheduled"
 	containerStatusPending   = "pending"
 	containerStatusBackoff   = "backoff"

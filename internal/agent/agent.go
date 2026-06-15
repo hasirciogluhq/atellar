@@ -33,7 +33,7 @@ func Run() error {
 	}
 	defer session.Close()
 
-	cpClient := runtime.NewCPClient(session.GRPCClient(), cfg.NodeAPIKey)
+	cpClient := runtime.NewCPClient(session.GRPCClient(), session.CurrentAPIKey)
 
 	netManager, err := overlay.NewManager(overlay.ManagerConfig{
 		NodeID:            cfg.NodeID,
@@ -53,7 +53,7 @@ func Run() error {
 		cfg.OverlayIP,
 		cfg.OverlaySubnet,
 		session.GRPCClient(),
-		cfg.NodeAPIKey,
+		session.CurrentAPIKey,
 	)
 
 	session.SetNetworkReconciler(netManager)

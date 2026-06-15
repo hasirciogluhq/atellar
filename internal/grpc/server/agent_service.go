@@ -15,6 +15,7 @@ import (
 	nodeusecases "github.com/hasirciogluhq/atellar/internal/modules/nodes/application/usecases"
 	nodeports "github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
 	"github.com/hasirciogluhq/atellar/internal/platform/authn"
+	"github.com/hasirciogluhq/atellar/internal/platform/authz"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -33,18 +34,38 @@ func (s *AgentService) Register(grpcServer *grpc.Server) {
 	atellarv1.RegisterAgentServiceServer(grpcServer, s)
 }
 
-func (s *AgentService) Connect(stream grpc.BidiStreamingServer[atellarv1.AgentEnvelope, atellarv1.ServerEnvelope]) error {
-	ctx, principal, err := authn.AuthenticateGRPC(stream.Context(), s.deps.NodeAuth)
+func (s *AgentService) authenticateAndAuthorize(ctx context.Context, action authz.Action) (context.Context, error) {
+	authCtx, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth)
 	if err != nil {
-		return status.Errorf(codes.Unauthenticated, "%v", err)
+		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+	if err := s.authorize(authCtx, action); err != nil {
+		return nil, err
+	}
+	return authCtx, nil
+}
+
+func (s *AgentService) authorize(ctx context.Context, action authz.Action) error {
+	authorizer := s.deps.Authz
+	if authorizer == nil {
+		authorizer = authz.New(nil)
+	}
+	if err := authorizer.Assert(ctx, action); err != nil {
+		return status.Errorf(codes.PermissionDenied, "%v", err)
+	}
+	return nil
+}
+
+func (s *AgentService) Connect(stream grpc.BidiStreamingServer[atellarv1.AgentEnvelope, atellarv1.ServerEnvelope]) error {
+	ctx, err := s.authenticateAndAuthorize(stream.Context(), authz.ActionAgentConnect)
+	if err != nil {
+		return err
 	}
 
 	node, err := authn.MustNodeFromContext(ctx)
 	if err != nil {
 		return status.Errorf(codes.Unauthenticated, "%v", err)
 	}
-
-	_ = principal
 
 	log.Printf("agent connected node_id=%s name=%s", node.ID, node.Name)
 
@@ -65,6 +86,9 @@ func (s *AgentService) Connect(stream grpc.BidiStreamingServer[atellarv1.AgentEn
 
 		switch payload := msg.Payload.(type) {
 		case *atellarv1.AgentEnvelope_Heartbeat:
+			if err := s.authorize(ctx, authz.ActionAgentHeartbeat); err != nil {
+				return err
+			}
 			if err := s.deps.Nodes.UpdateNodeHeartbeat(stream.Context(), node.ID); err != nil {
 				return status.Errorf(codes.Internal, "heartbeat failed: %v", err)
 			}
@@ -105,12 +129,17 @@ func (s *AgentService) RenewNodeAPIKey(ctx context.Context, _ *atellarv1.RenewNo
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
 
-	if _, err := s.deps.NodeAuth.Authenticate(ctx, credential); err != nil {
+	principal, err := s.deps.NodeAuth.Authenticate(ctx, credential)
+	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	}
+	authCtx := authn.WithPrincipal(ctx, principal)
+	if err := s.authorize(authCtx, authz.ActionNodeRenewAPIKey); err != nil {
+		return nil, err
 	}
 
 	useCase := nodeusecases.NewRenewNodeAPIKeyUseCase(s.deps.Nodes)
-	result, err := useCase.Execute(ctx, credential.Value)
+	result, err := useCase.Execute(authCtx, credential.Value)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
 	}
@@ -122,18 +151,19 @@ func (s *AgentService) RenewNodeAPIKey(ctx context.Context, _ *atellarv1.RenewNo
 }
 
 func (s *AgentService) GetClusterNetworkState(ctx context.Context, _ *atellarv1.GetClusterNetworkStateRequest) (*atellarv1.GetClusterNetworkStateResponse, error) {
-	if _, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth); err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+	authCtx, err := s.authenticateAndAuthorize(ctx, authz.ActionAgentReadClusterNetwork)
+	if err != nil {
+		return nil, err
 	}
 
 	listNodes := nodeusecases.NewListNodesUseCase(s.deps.Nodes)
-	nodes, err := listNodes.Execute(ctx)
+	nodes, err := listNodes.Execute(authCtx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list nodes: %v", err)
 	}
 
 	listContainers := containerusecases.NewListContainersUseCase(s.deps.Containers)
-	containers, err := listContainers.Execute(ctx, "")
+	containers, err := listContainers.Execute(authCtx, "")
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list containers: %v", err)
 	}
@@ -165,9 +195,9 @@ func (s *AgentService) GetClusterNetworkState(ctx context.Context, _ *atellarv1.
 }
 
 func (s *AgentService) GetNodeWorkloads(ctx context.Context, _ *atellarv1.GetNodeWorkloadsRequest) (*atellarv1.GetNodeWorkloadsResponse, error) {
-	authCtx, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth)
+	authCtx, err := s.authenticateAndAuthorize(ctx, authz.ActionAgentReadWorkloads)
 	if err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+		return nil, err
 	}
 	nodeID, err := authn.ResolveNodeIDFromContext(authCtx)
 	if err != nil {
@@ -188,9 +218,9 @@ func (s *AgentService) GetNodeWorkloads(ctx context.Context, _ *atellarv1.GetNod
 }
 
 func (s *AgentService) ReportContainerRuntime(ctx context.Context, req *atellarv1.ReportContainerRuntimeRequest) (*atellarv1.ReportContainerRuntimeResponse, error) {
-	authCtx, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth)
+	authCtx, err := s.authenticateAndAuthorize(ctx, authz.ActionAgentReportRuntime)
 	if err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+		return nil, err
 	}
 	nodeID, err := authn.ResolveNodeIDFromContext(authCtx)
 	if err != nil {
@@ -227,9 +257,9 @@ func (s *AgentService) ReportContainerRuntime(ctx context.Context, req *atellarv
 }
 
 func (s *AgentService) AllocateContainerOverlayIP(ctx context.Context, req *atellarv1.AllocateContainerOverlayIPRequest) (*atellarv1.AllocateContainerOverlayIPResponse, error) {
-	authCtx, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth)
+	authCtx, err := s.authenticateAndAuthorize(ctx, authz.ActionAgentAllocateOverlayIP)
 	if err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+		return nil, err
 	}
 	nodeID, err := authn.ResolveNodeIDFromContext(authCtx)
 	if err != nil {
@@ -253,9 +283,9 @@ func (s *AgentService) AllocateContainerOverlayIP(ctx context.Context, req *atel
 }
 
 func (s *AgentService) ReportNodeHardware(ctx context.Context, req *atellarv1.ReportNodeHardwareRequest) (*atellarv1.ReportNodeHardwareResponse, error) {
-	authCtx, _, err := authn.AuthenticateGRPC(ctx, s.deps.NodeAuth)
+	authCtx, err := s.authenticateAndAuthorize(ctx, authz.ActionAgentReportHardware)
 	if err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "%v", err)
+		return nil, err
 	}
 	nodeID, err := authn.ResolveNodeIDFromContext(authCtx)
 	if err != nil {

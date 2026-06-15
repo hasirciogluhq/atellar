@@ -4,15 +4,15 @@ import (
 	"context"
 	"net"
 
-	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
 	"github.com/hasirciogluhq/atellar/internal/agent/overlay"
+	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
 	"github.com/hasirciogluhq/atellar/internal/platform/authn"
 )
 
 func (s *Session) SyncClusterState(ctx context.Context) ([]overlay.ClusterNode, []overlay.ClusterContainer, error) {
 	syncCtx := authn.OutgoingContext(ctx, authn.Credential{
 		Type:  authn.CredentialTypeNodeAPIKey,
-		Value: s.cfg.NodeAPIKey,
+		Value: s.CurrentAPIKey(),
 	})
 
 	resp, err := s.client.GetClusterNetworkState(syncCtx, &atellarv1.GetClusterNetworkStateRequest{})

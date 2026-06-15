@@ -10,7 +10,7 @@ Provides the control plane over HTTP (`:8080`) and gRPC (`:9090`).
 
 ```bash
 # after release install.sh
-sudo atelctl server install \
+sudo ateladm server install \
   --database-url "postgresql://postgres:secret@localhost:5432/atellar_cp?sslmode=disable" \
   --migrations-path /usr/share/atellar/migrations \
   --port 8080 --grpc-port 9090
@@ -118,7 +118,7 @@ If overlay changes, peers receive `node.updated` (with `previous_overlay_*` fiel
 
 ## Infrastructure
 
-`cmd/api/shared/infrasturcture.go`:
+`internal/controlplane/bootstrap/infrasturcture.go`:
 
 | Component | Role |
 |-----------|------|
@@ -136,7 +136,7 @@ Most HTTP endpoints are currently unauthenticated (MVP). Production should add a
 
 ## Related code
 
-- `cmd/api/routes/` — HTTP handlers
+- `internal/controlplane/transport/http/routes/` — HTTP handlers
 - `internal/grpc/server/` — gRPC server
 - `internal/grpc/agentregistry/` — peer registry + notify
 - `internal/modules/nodes/` — node use cases

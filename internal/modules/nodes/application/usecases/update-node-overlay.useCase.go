@@ -11,9 +11,9 @@ import (
 )
 
 type UpdateNodeOverlayInput struct {
-	NodeID      string
-	OverlayIP   net.IP
-	SubnetCIDR  string
+	NodeID     string
+	OverlayIP  net.IP
+	SubnetCIDR string
 }
 
 type UpdateNodeOverlayUseCase struct {

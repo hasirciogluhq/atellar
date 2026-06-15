@@ -15,10 +15,10 @@
 
 Example env file: `cmd/api/.env.example`
 
-Production (systemd) — written by `atelctl server install` to `/etc/atellar/api.env` (mode `0600`):
+Production (systemd) — written by `ateladm server install` to `/etc/atellar/api.env` (mode `0600`):
 
 ```bash
-sudo atelctl server install \
+sudo ateladm server install \
   --database-url "postgresql://postgres:secret@localhost:5432/atellar_cp?sslmode=disable" \
   --migrations-path /usr/share/atellar/migrations \
   --port 8080 --grpc-port 9090

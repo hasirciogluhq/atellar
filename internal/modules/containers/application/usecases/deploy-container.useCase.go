@@ -11,8 +11,8 @@ import (
 )
 
 type DeployContainerUseCase struct {
-	scheduler   *services.Scheduler
-	containers  ports.ContainerRepositoryInterface
+	scheduler  *services.Scheduler
+	containers ports.ContainerRepositoryInterface
 	peerNotify ports.PeerNotifier
 }
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/hasirciogluhq/atellar/internal/modules/nodes/ports"
 	"github.com/hasirciogluhq/atellar/internal/platform/authn"
+	"github.com/hasirciogluhq/atellar/internal/platform/authz"
 )
 
 type NodeAuthenticator struct {
@@ -35,5 +36,6 @@ func (a *NodeAuthenticator) Authenticate(ctx context.Context, credential authn.C
 			ID:   authenticatedNode.ID,
 			Name: authenticatedNode.Name,
 		},
+		Scopes: authz.NodeAgentScopes(),
 	}, nil
 }

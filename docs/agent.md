@@ -1,6 +1,6 @@
 # Agent
 
-Binary: `atellar-agent` (`cmd/agent`)
+Binary: `atelagent` (`cmd/atelagent`)
 
 Node-side process. Reads `/etc/atellar/agent.json` only — no env vars, no HTTP to control plane.
 
@@ -65,6 +65,6 @@ On `DELETE /containers/:id`: CP sets `removed` → agent terminates, cleans netn
 
 ## Node setup (atelctl)
 
-- `atelctl agent install` — dirs + systemd
-- `atelctl agent join` — writes config (address + ports + credentials)
+- `ateladm node install` — dirs + systemd
+- `ateladm node join` — writes config (address + ports + credentials)
 - `install --auto-join` — install then join in one chain

@@ -1,21 +1,31 @@
-# atelctl
+# CLI
 
 ```
 atelctl
-├── server
-│   └── install           # /etc/atellar/api.env + atellar-api.service
-├── agent
-│   ├── install           # dirs + systemd (+ optional --auto-join → Join chain)
-│   ├── join              # register + write /etc/atellar/agent.json
-│   └── renew-key
-└── cluster
+├── cluster
     ├── nodes list
     └── containers list
+├── config
+    ├── set-cluster
+    ├── set-context
+    ├── use-context
+    ├── current-context
+    └── get-contexts
+
+ateladm
+├── server
+│   └── install           # /etc/atellar/api.env + atellar-api.service
+└── node
+    ├── install           # dirs + systemd (+ optional --auto-join)
+    ├── join              # register + write /etc/atellar/agent.json
+    └── renew-key
+
+atelagent                       # node agent daemon
 ```
 
 ## Control plane connection
 
-Address and ports are **separate and required** on join / cluster commands:
+Address and ports can be stored in an atelctl context, so day-to-day commands do not need endpoint flags.
 
 | Flag | Description |
 |------|-------------|
@@ -23,7 +33,24 @@ Address and ports are **separate and required** on join / cluster commands:
 | `--http-port` | HTTP API port (atelctl → register, list) |
 | `--grpc-port` | gRPC port (agent stream) |
 
-Join writes all three into `/etc/atellar/agent.json`. Agent dials `address:grpc_port`; atelctl HTTP uses `http://address:http_port`.
+Explicit endpoint flags still work and override the current context. `ateladm node join` writes all three resolved values into `/etc/atellar/agent.json`. atelagent dials `address:grpc_port`; atelctl HTTP uses `http://address:http_port`.
+
+## Config
+
+Default path: `~/.atellar/config`. Override with global `--config`.
+
+```bash
+atelctl config set-cluster local \
+  --control-plane-address 127.0.0.1 \
+  --http-port 8080 \
+  --grpc-port 9090
+
+atelctl config set-context local --cluster local
+atelctl config use-context local
+
+atelctl config current-context
+atelctl config get-contexts
+```
 
 ## Fixed paths
 
@@ -32,7 +59,7 @@ Join writes all three into `/etc/atellar/agent.json`. Agent dials `address:grpc_
 | API binary | `/usr/local/bin/atellar-api` |
 | API env (systemd) | `/etc/atellar/api.env` |
 | API migrations | `/usr/share/atellar/migrations` |
-| Agent binary | `/usr/local/bin/atellar-agent` |
+| Agent binary | `/usr/local/bin/atelagent` |
 | Agent config | `/etc/atellar/agent.json` |
 | Agent logs | `/var/log/atellar` |
 
@@ -41,7 +68,7 @@ Join writes all three into `/etc/atellar/agent.json`. Agent dials `address:grpc_
 Requires root. Writes secrets to `/etc/atellar/api.env` and installs `atellar-api.service`.
 
 ```bash
-sudo atelctl server install \
+sudo ateladm server install \
   --database-url "postgresql://postgres:secret@localhost:5432/atellar_cp?sslmode=disable" \
   --migrations-path /usr/share/atellar/migrations \
   --port 8080 --grpc-port 9090
@@ -65,48 +92,43 @@ Env template: `cmd/api/.env.example`
 - `--name`
 - `--public-ip`
 - `--private-ip`
+
+Same flags are required on **`ateladm node install --auto-join`**.
+
+Endpoint flags are optional when a current context is configured:
+
 - `--control-plane-address`
 - `--http-port`
 - `--grpc-port`
 
-Same flags required on **`agent install --auto-join`**.
-
-`cluster` commands require: `--control-plane-address`, `--http-port`, `--grpc-port`.
+`cluster` commands use the current context by default.
 
 ## Flow
 
 ```bash
-sudo cp atellar-agent /usr/local/bin/
+sudo cp atelagent /usr/local/bin/
 
-sudo atelctl agent install \
+sudo ateladm node install \
   --auto-join \
   --join-token <TOKEN> \
   --name node-1 \
   --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5 \
-  --control-plane-address cp-host \
-  --http-port 8080 \
-  --grpc-port 9090
+  --private-ip 10.0.0.5
 
 # or separate
-sudo atelctl agent install
-atelctl agent join \
+sudo ateladm node install
+ateladm node join \
   --join-token <TOKEN> \
   --name node-1 \
   --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5 \
-  --control-plane-address cp-host \
-  --http-port 8080 \
-  --grpc-port 9090
+  --private-ip 10.0.0.5
 ```
 
 ## Cluster
 
 ```bash
-atelctl cluster nodes list \
-  --control-plane-address cp-host \
-  --http-port 8080 \
-  --grpc-port 9090
+atelctl cluster nodes list
+atelctl cluster containers list
 ```
 
 ## Release install / uninstall
@@ -125,7 +147,7 @@ curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/ins
 # from extracted tarball
 sudo ./install.sh --local
 
-# remove everything (api, agent, atelctl, config, migrations, workloads)
+# remove everything (api, agent, ateladm, atelctl, config, migrations, workloads)
 sudo ./uninstall.sh --yes
 ```
 

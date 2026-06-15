@@ -71,7 +71,7 @@ ip netns exec ctr_<id> ip addr
 ip netns exec ctr_<id> ip route
 
 # Agent logs
-journalctl -u atellar-agent -n 100 --no-pager
+journalctl -u atelagent -n 100 --no-pager
 ```
 
 Expected healthy state on node `10.0.2.1/24`:
@@ -92,7 +92,7 @@ default via 10.0.2.1 dev vh...
 ```bash
 sudo ip link del vh<hash> 2>/dev/null || true   # host veth name from ip link | grep vh
 sudo ip netns del ctr_<container_id> 2>/dev/null || true
-sudo systemctl restart atellar-agent
+sudo systemctl restart atelagent
 ```
 
 Delete the failed workload from the control plane, then redeploy.

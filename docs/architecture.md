@@ -60,7 +60,7 @@ Per-node bridge + per-container veth/netns: [networking.md](networking.md).
 
 ## Infrastructure wiring
 
-`cmd/api/shared/infrasturcture.go` creates on startup:
+`internal/controlplane/bootstrap/infrasturcture.go` creates on startup:
 
 ```
 Database → sqlc Queries

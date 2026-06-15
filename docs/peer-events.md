@@ -115,5 +115,5 @@ Details: [agent.md](agent.md). Cluster sync uses gRPC `GetClusterNetworkState`, 
 
 - `internal/grpc/agentregistry/events.go` — event constants + push
 - `internal/grpc/agentregistry/peer_notifier.go` — node + container notify
-- `cmd/api/routes/v1/container/container.routes.go` — container event wiring
+- `internal/controlplane/transport/http/routes/v1/container/container.routes.go` — container event wiring
 - `internal/modules/nodes/application/usecases/update-node-overlay.useCase.go`

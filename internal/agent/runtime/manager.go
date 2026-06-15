@@ -29,13 +29,13 @@ type Manager struct {
 func NewManager(
 	nodeID, containerdSocket, bridgeName, nodeOverlayIP, nodeOverlaySubnet string,
 	grpcClient atellarv1.AgentServiceClient,
-	apiKey string,
+	apiKeyProvider func() string,
 ) *Manager {
 	return &Manager{
 		nodeID:            nodeID,
 		nodeOverlayIP:     nodeOverlayIP,
 		nodeOverlaySubnet: nodeOverlaySubnet,
-		cp:                NewCPClient(grpcClient, apiKey),
+		cp:                NewCPClient(grpcClient, apiKeyProvider),
 		containerd:        NewContainerdRuntime(containerdSocket, bridgeName, "/var/log/atellar"),
 		bridgeName:        bridgeName,
 		triggerCh:         make(chan struct{}, 1),

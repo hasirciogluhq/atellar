@@ -6,8 +6,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/hasirciogluhq/atellar/internal/atelctl/cluster"
-	"github.com/hasirciogluhq/atellar/pkg/client"
+	"github.com/hasirciogluhq/atellar/internal/cli/atelctl/cluster"
 	"github.com/spf13/cobra"
 )
 
@@ -16,14 +15,6 @@ var (
 	clusterHTTPPort            int
 	clusterGRPCPort            int
 )
-
-func clusterControlPlane() client.ControlPlane {
-	return client.ControlPlane{
-		Address:  clusterControlPlaneAddress,
-		HTTPPort: clusterHTTPPort,
-		GRPCPort: clusterGRPCPort,
-	}
-}
 
 var clusterCmd = &cobra.Command{
 	Use:   "cluster",
@@ -44,7 +35,12 @@ var clusterNodesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List registered nodes",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		nodes, err := cluster.ListNodes(context.Background(), clusterControlPlane())
+		cp, err := resolveControlPlaneFromFlagsOrConfig(clusterControlPlaneAddress, clusterHTTPPort, clusterGRPCPort)
+		if err != nil {
+			return err
+		}
+
+		nodes, err := cluster.ListNodes(context.Background(), cp)
 		if err != nil {
 			return err
 		}
@@ -65,7 +61,12 @@ var clusterContainersListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List containers",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		containers, err := cluster.ListContainers(context.Background(), clusterControlPlane(), clusterContainersListNodeID)
+		cp, err := resolveControlPlaneFromFlagsOrConfig(clusterControlPlaneAddress, clusterHTTPPort, clusterGRPCPort)
+		if err != nil {
+			return err
+		}
+
+		containers, err := cluster.ListContainers(context.Background(), cp, clusterContainersListNodeID)
 		if err != nil {
 			return err
 		}
@@ -84,10 +85,6 @@ func init() {
 	clusterCmd.PersistentFlags().StringVar(&clusterControlPlaneAddress, "control-plane-address", "", "control plane host or IP")
 	clusterCmd.PersistentFlags().IntVar(&clusterHTTPPort, "http-port", 0, "control plane HTTP port")
 	clusterCmd.PersistentFlags().IntVar(&clusterGRPCPort, "grpc-port", 0, "control plane gRPC port")
-
-	for _, flag := range []string{"control-plane-address", "http-port", "grpc-port"} {
-		_ = clusterCmd.MarkPersistentFlagRequired(flag)
-	}
 
 	clusterContainersListCmd.Flags().StringVar(&clusterContainersListNodeID, "node-id", "", "filter by node id")
 

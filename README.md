@@ -28,13 +28,15 @@ atellar-api
 | Component | Binary | Role |
 |-----------|--------|------|
 | **API Server** | `cmd/api` | HTTP `:8080` + gRPC `:9090`, node/container management, overlay IPAM |
-| **atelctl** | `cmd/atelctl` | `agent install/join`, `cluster nodes/containers list` |
-| **Agent** | `cmd/agent` | gRPC-only: config, stream, heartbeat, overlay reconcile |
+| **atelctl** | `cmd/atelctl` | Client config, contexts, cluster inspection |
+| **ateladm** | `cmd/ateladm` | Server install and node join/install operations |
+| **Agent** | `cmd/atelagent` | gRPC-only: config, stream, heartbeat, overlay reconcile |
 
 ## Architecture (overview)
 
 ```
-atelctl ──register──► API Server ◄──gRPC stream── Agent
+atelctl ──query──────► API Server ◄──gRPC stream── atelagent
+ateladm ──manage─────►     ▲
                       │
                    PostgreSQL
                       │

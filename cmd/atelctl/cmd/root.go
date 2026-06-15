@@ -8,12 +8,13 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "atelctl",
-	Short: "Atellar control tool — manage cluster and node agents",
-	Long: `atelctl talks to the control plane (cluster) and configures local node agents.
+	Short: "Atellar client — inspect and operate clusters",
+	Long: `atelctl talks to Atellar control planes as an end-user client.
 
 Examples:
-  sudo atelctl server install --database-url postgresql://user:pass@localhost:5432/atellar_cp?sslmode=disable
-  sudo atelctl agent install --auto-join --join-token <TOKEN> --name node-1 --public-ip <IP> --private-ip <IP> --control-plane-address <HOST> --http-port 8080 --grpc-port 9090
+  atelctl config set-cluster local --control-plane-address 127.0.0.1 --http-port 8080 --grpc-port 9090
+  atelctl config set-context local --cluster local
+  atelctl config use-context local
   atelctl cluster nodes list`,
 }
 

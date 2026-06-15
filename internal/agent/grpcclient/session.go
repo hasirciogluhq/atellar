@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sync"
 	"time"
 
-	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
 	"github.com/hasirciogluhq/atellar/internal/agent/config"
 	"github.com/hasirciogluhq/atellar/internal/agent/overlay"
+	atellarv1 "github.com/hasirciogluhq/atellar/internal/grpc/gen/atellar/v1"
 	"github.com/hasirciogluhq/atellar/internal/platform/authn"
 	"github.com/hasirciogluhq/atellar/internal/platform/nodetoken"
 	"google.golang.org/grpc"
@@ -26,12 +27,25 @@ type workloadTrigger interface {
 }
 
 type Session struct {
+	mu         sync.RWMutex
 	cfg        *config.Config
 	configPath string
 	conn       *grpc.ClientConn
 	client     atellarv1.AgentServiceClient
 	network    networkReconciler
 	workloads  workloadTrigger
+}
+
+func (s *Session) CurrentAPIKey() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.NodeAPIKey
+}
+
+func (s *Session) currentAPIKeyExpiresAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.APIKeyExpiresAt
 }
 
 func NewSession(cfg *config.Config, configPath string, network networkReconciler) (*Session, error) {
@@ -71,7 +85,7 @@ func (s *Session) GRPCClient() atellarv1.AgentServiceClient {
 func (s *Session) Run(ctx context.Context, heartbeatEvery time.Duration) error {
 	streamCtx := authn.OutgoingContext(ctx, authn.Credential{
 		Type:  authn.CredentialTypeNodeAPIKey,
-		Value: s.cfg.NodeAPIKey,
+		Value: s.CurrentAPIKey(),
 	})
 
 	stream, err := s.client.Connect(streamCtx)
@@ -105,7 +119,7 @@ func (s *Session) Run(ctx context.Context, heartbeatEvery time.Duration) error {
 				log.Printf("heartbeat failed: %v", err)
 			}
 		case <-renewTicker.C:
-			if nodetoken.ShouldRenew(s.cfg.APIKeyExpiresAt) {
+			if nodetoken.ShouldRenew(s.currentAPIKeyExpiresAt()) {
 				if err := s.renewAPIKey(ctx); err != nil {
 					log.Printf("api key renew failed: %v", err)
 				}
@@ -185,7 +199,7 @@ func (s *Session) sendHeartbeat(stream grpc.BidiStreamingClient[atellarv1.AgentE
 func (s *Session) renewAPIKey(ctx context.Context) error {
 	renewCtx := authn.OutgoingContext(ctx, authn.Credential{
 		Type:  authn.CredentialTypeNodeAPIKey,
-		Value: s.cfg.NodeAPIKey,
+		Value: s.CurrentAPIKey(),
 	})
 
 	resp, err := s.client.RenewNodeAPIKey(renewCtx, &atellarv1.RenewNodeAPIKeyRequest{})
@@ -193,13 +207,16 @@ func (s *Session) renewAPIKey(ctx context.Context) error {
 		return err
 	}
 
+	s.mu.Lock()
 	s.cfg.NodeAPIKey = resp.GetNodeApiKey()
 	s.cfg.APIKeyExpiresAt = time.Unix(resp.GetExpiresAtUnix(), 0)
+	cfg := *s.cfg
+	s.mu.Unlock()
 
-	if err := config.Save(s.configPath, *s.cfg); err != nil {
+	if err := config.Save(s.configPath, cfg); err != nil {
 		return err
 	}
 
-	log.Printf("node api key renewed expires_at=%s", s.cfg.APIKeyExpiresAt.Format(time.RFC3339))
+	log.Printf("node api key renewed expires_at=%s", cfg.APIKeyExpiresAt.Format(time.RFC3339))
 	return nil
 }

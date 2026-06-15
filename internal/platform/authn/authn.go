@@ -34,6 +34,7 @@ type Node struct {
 type Principal struct {
 	SubjectType SubjectType
 	Node        *Node
+	Scopes      []string
 }
 
 type Credential struct {

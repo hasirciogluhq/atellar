@@ -11,19 +11,26 @@ import (
 )
 
 type CPClient struct {
-	client atellarv1.AgentServiceClient
-	apiKey string
+	client         atellarv1.AgentServiceClient
+	apiKeyProvider func() string
 }
 
-func NewCPClient(client atellarv1.AgentServiceClient, apiKey string) *CPClient {
-	return &CPClient{client: client, apiKey: apiKey}
+func NewCPClient(client atellarv1.AgentServiceClient, apiKeyProvider func() string) *CPClient {
+	return &CPClient{client: client, apiKeyProvider: apiKeyProvider}
 }
 
 func (c *CPClient) ctx(ctx context.Context) context.Context {
 	return authn.OutgoingContext(ctx, authn.Credential{
 		Type:  authn.CredentialTypeNodeAPIKey,
-		Value: c.apiKey,
+		Value: c.apiKey(),
 	})
+}
+
+func (c *CPClient) apiKey() string {
+	if c.apiKeyProvider == nil {
+		return ""
+	}
+	return c.apiKeyProvider()
 }
 
 func (c *CPClient) ListWorkloads(ctx context.Context) ([]Workload, error) {
@@ -74,7 +81,7 @@ type RuntimeReport struct {
 func (c *CPClient) ReportRuntime(ctx context.Context, report RuntimeReport) error {
 	_, err := c.client.ReportContainerRuntime(c.ctx(ctx), &atellarv1.ReportContainerRuntimeRequest{
 		ContainerId:      report.ContainerID,
-		ContainerdId:       report.ContainerdID,
+		ContainerdId:     report.ContainerdID,
 		SnapshotKey:      report.SnapshotKey,
 		TaskPid:          report.TaskPID,
 		ImageDigest:      report.ImageDigest,

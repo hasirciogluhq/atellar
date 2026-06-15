@@ -13,19 +13,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/lib/pq"
 
-	http_routes "github.com/hasirciogluhq/atellar/cmd/api/routes"
-	"github.com/hasirciogluhq/atellar/cmd/api/shared"
 	"github.com/hasirciogluhq/atellar/internal/config"
+	bootstrap "github.com/hasirciogluhq/atellar/internal/controlplane/bootstrap"
+	http_routes "github.com/hasirciogluhq/atellar/internal/controlplane/transport/http/routes"
 	db_generated "github.com/hasirciogluhq/atellar/internal/db/generated"
 	grpcserver "github.com/hasirciogluhq/atellar/internal/grpc/server"
 	"github.com/hasirciogluhq/migrator"
 )
 
-func NewDatabase(config *config.APIConfig) *shared.Database {
+func NewDatabase(config *config.APIConfig) *bootstrap.Database {
 	return setupDatabaseConnections(config)
 }
 
-func setupDatabaseConnections(config *config.APIConfig) *shared.Database {
+func setupDatabaseConnections(config *config.APIConfig) *bootstrap.Database {
 	pool, err := pgxpool.New(context.Background(), config.DatabaseURL)
 	if err != nil {
 		panic(err)
@@ -36,10 +36,10 @@ func setupDatabaseConnections(config *config.APIConfig) *shared.Database {
 		panic(err)
 	}
 
-	return &shared.Database{Pool: pool, SqlDb: sqlDb}
+	return &bootstrap.Database{Pool: pool, SqlDb: sqlDb}
 }
 
-func setupMigrations(database *shared.Database, config *config.APIConfig) *migrator.Migrator {
+func setupMigrations(database *bootstrap.Database, config *config.APIConfig) *migrator.Migrator {
 	mgr := migrator.NewWithOptions(database.SqlDb, migrator.Options{
 		DatabaseURL:    config.DatabaseURL,
 		MigrationsPath: config.MigrationsPath,
@@ -71,7 +71,7 @@ func main() {
 
 	_ = db_generated.New(database.Pool)
 
-	infra, err := shared.LoadInfrastructure(database, config)
+	infra, err := bootstrap.LoadInfrastructure(database, config)
 	if err != nil {
 		panic(err)
 	}
@@ -80,6 +80,7 @@ func main() {
 		log.Printf("grpc server listening on :%s", config.GRPCPort)
 		if err := grpcserver.ListenAndServe(config.GRPCPort, grpcserver.Deps{
 			NodeAuth:              infra.NodeAuth,
+			Authz:                 infra.Authz,
 			Nodes:                 infra.Repositories.Nodes,
 			Containers:            infra.Repositories.Containers,
 			AgentRegistry:         infra.AgentRegistry,
