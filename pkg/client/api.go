@@ -30,6 +30,22 @@ func (c *AtellarClient) RegisterNode(ctx context.Context, joinToken string, req 
 	return &result, nil
 }
 
+func (c *AtellarClient) CreateJoinToken(ctx context.Context, req CreateJoinTokenRequest) (*JoinToken, error) {
+	var result JoinToken
+	if err := c.Do(ctx, http.MethodPost, apiPrefix+"/nodes/join-tokens", nil, req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *AtellarClient) ListJoinTokens(ctx context.Context) ([]JoinToken, error) {
+	var result []JoinToken
+	if err := c.get(ctx, apiPrefix+"/nodes/join-tokens", nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *AtellarClient) RenewNodeAPIKey(ctx context.Context, nodeAPIKey string) (*NodeAPIKeyResult, error) {
 	client := c.WithBearer(nodeAPIKey)
 	var result NodeAPIKeyResult
@@ -47,6 +63,38 @@ func (c *AtellarClient) ListNodes(ctx context.Context) ([]Node, error) {
 	return nodes, nil
 }
 
+func (c *AtellarClient) GetNode(ctx context.Context, nodeID string) (*Node, error) {
+	var node Node
+	if err := c.get(ctx, apiPrefix+"/nodes/"+url.PathEscape(nodeID), nil, &node); err != nil {
+		return nil, err
+	}
+	return &node, nil
+}
+
+func (c *AtellarClient) HeartbeatNode(ctx context.Context, nodeID string) (*MessageResponse, error) {
+	var result MessageResponse
+	if err := c.Do(ctx, http.MethodPost, apiPrefix+"/nodes/"+url.PathEscape(nodeID)+"/heartbeat", nil, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *AtellarClient) EvictNode(ctx context.Context, nodeID string) (*Node, error) {
+	var node Node
+	if err := c.Do(ctx, http.MethodPost, apiPrefix+"/nodes/"+url.PathEscape(nodeID)+"/evict", nil, nil, &node); err != nil {
+		return nil, err
+	}
+	return &node, nil
+}
+
+func (c *AtellarClient) UpdateNodeOverlay(ctx context.Context, nodeID string, req UpdateNodeOverlayRequest) (*Node, error) {
+	var node Node
+	if err := c.Do(ctx, http.MethodPatch, apiPrefix+"/nodes/"+url.PathEscape(nodeID)+"/overlay", nil, req, &node); err != nil {
+		return nil, err
+	}
+	return &node, nil
+}
+
 func (c *AtellarClient) CreateContainer(ctx context.Context, req CreateContainerRequest) (*Container, error) {
 	var result Container
 	if err := c.Do(ctx, http.MethodPost, apiPrefix+"/containers", nil, req, &result); err != nil {
@@ -55,9 +103,17 @@ func (c *AtellarClient) CreateContainer(ctx context.Context, req CreateContainer
 	return &result, nil
 }
 
+func (c *AtellarClient) GetContainer(ctx context.Context, containerID string) (*Container, error) {
+	var result Container
+	if err := c.get(ctx, apiPrefix+"/containers/"+url.PathEscape(containerID), nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func (c *AtellarClient) DeleteContainer(ctx context.Context, containerID string) (*Container, error) {
 	var result Container
-	if err := c.Do(ctx, http.MethodDelete, apiPrefix+"/containers/"+containerID, nil, nil, &result); err != nil {
+	if err := c.Do(ctx, http.MethodDelete, apiPrefix+"/containers/"+url.PathEscape(containerID), nil, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -74,4 +130,77 @@ func (c *AtellarClient) ListContainers(ctx context.Context, nodeID string) ([]Co
 		return nil, err
 	}
 	return containers, nil
+}
+
+func (c *AtellarClient) UpdateContainerStatus(ctx context.Context, containerID string, status string) (*Container, error) {
+	return c.UpdateContainerStatusWithRequest(ctx, containerID, UpdateContainerStatusRequest{Status: status})
+}
+
+func (c *AtellarClient) UpdateContainerStatusWithRequest(ctx context.Context, containerID string, req UpdateContainerStatusRequest) (*Container, error) {
+	var result Container
+	if err := c.Do(ctx, http.MethodPatch, apiPrefix+"/containers/"+url.PathEscape(containerID)+"/status", nil, req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *AtellarClient) UpdateContainerRuntime(ctx context.Context, containerID string, req UpdateContainerRuntimeRequest) (*Container, error) {
+	var result Container
+	if err := c.Do(ctx, http.MethodPatch, apiPrefix+"/containers/"+url.PathEscape(containerID)+"/runtime", nil, req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *AtellarClient) ListContainerEvents(ctx context.Context, containerID string) ([]ContainerEvent, error) {
+	var result []ContainerEvent
+	if err := c.get(ctx, apiPrefix+"/containers/"+url.PathEscape(containerID)+"/events", nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *AtellarClient) CreateContainerEvent(ctx context.Context, containerID string, req CreateContainerEventRequest) (*ContainerEvent, error) {
+	var result ContainerEvent
+	if err := c.Do(ctx, http.MethodPost, apiPrefix+"/containers/"+url.PathEscape(containerID)+"/events", nil, req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *AtellarClient) CreateOverlayIP(ctx context.Context, req CreateOverlayIPRequest) (*OverlayIPPoolEntry, error) {
+	var result OverlayIPPoolEntry
+	if err := c.Do(ctx, http.MethodPost, apiPrefix+"/overlay-ips", nil, req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *AtellarClient) ListOverlayIPs(ctx context.Context, nodeID string, freeOnly bool) ([]OverlayIPPoolEntry, error) {
+	query := url.Values{"node_id": {nodeID}}
+	if freeOnly {
+		query.Set("free", "true")
+	}
+
+	var result []OverlayIPPoolEntry
+	if err := c.get(ctx, apiPrefix+"/overlay-ips", query, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *AtellarClient) AllocateOverlayIP(ctx context.Context, ip string, req AllocateOverlayIPRequest) (*OverlayIPPoolEntry, error) {
+	var result OverlayIPPoolEntry
+	if err := c.Do(ctx, http.MethodPost, apiPrefix+"/overlay-ips/"+url.PathEscape(ip)+"/allocate", nil, req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *AtellarClient) ReleaseOverlayIP(ctx context.Context, ip string) (*MessageResponse, error) {
+	var result MessageResponse
+	if err := c.Do(ctx, http.MethodPost, apiPrefix+"/overlay-ips/"+url.PathEscape(ip)+"/release", nil, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }

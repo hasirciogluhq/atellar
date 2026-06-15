@@ -64,8 +64,15 @@ func ListContainers(ctx context.Context, cp client.ControlPlane, nodeID string) 
 			Image:        c.Image,
 			Status:       c.Status,
 			OverlayIP:    c.OverlayIP,
-			ErrorMessage: c.ErrorMessage,
+			ErrorMessage: derefString(c.ErrorMessage),
 		})
 	}
 	return out, nil
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }
