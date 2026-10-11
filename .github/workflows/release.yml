@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -34,3 +36,15 @@ jobs:
             dist/release-assets/install.sh
             dist/release-assets/uninstall.sh
           generate_release_notes: true
+
+      # Attaches atellar archives (darwin and linux) to the release above and
+      # updates the Homebrew formula in hasirciogluhq/homebrew-tap.
+      - name: Publish atellar to Homebrew
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
