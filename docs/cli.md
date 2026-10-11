@@ -1,161 +1,109 @@
-# CLI
+# CLI reference
+
+Atellar ships one binary, `atellar`. It installs the API server and node
+agent, runs both as systemd services, and is the client for every API call.
 
 ```
-atelctl
-├── cluster
-│   ├── nodes list
-│   └── containers list
-└── config
-    ├── set-cluster
-    ├── set-context
-    ├── use-context
-    ├── current-context
-    └── get-contexts
-
-ateladm
-├── server
-│   └── install           # /etc/atellar/api.env + atellar-api.service
-└── node
-    ├── install           # dirs + systemd (+ optional --auto-join)
-    ├── join              # register + write /etc/atellar/agent.json
-    └── renew-key
-
-atelagent                       # node agent daemon
+atellar [--config PATH] [--context NAME] [-o table|json] <command>
 ```
 
-## Control plane connection
+| Global flag | Default | Meaning |
+|-------------|---------|---------|
+| `--config` | `~/.atellar/config` | CLI configuration file |
+| `--context` | current context | Use another context for this call |
+| `-o, --output` | `table` | `table` or `json` |
 
-Address and ports can be stored in an atelctl context, so day-to-day commands do not need endpoint flags.
+## Setup commands (run as root)
 
-| Flag | Description |
-|------|-------------|
-| `--control-plane-address` | Host or IP (no scheme) |
-| `--http-port` | HTTP API port (atelctl/ateladm) |
-| `--grpc-port` | gRPC port (agent stream) |
+### `atellar server install`
 
-Explicit endpoint flags still work and override the current context. `ateladm node join` writes all three resolved values into `/etc/atellar/agent.json`. atelagent dials `address:grpc_port`; atelctl HTTP uses `http://address:http_port`.
+Writes `/etc/atellar/api.env` (mode 0600) and installs, enables and starts
+`atellar-server.service`.
 
-## Config
-
-Default path: `~/.atellar/config`. Override with global `--config`.
-
-```bash
-atelctl config set-cluster local \
-  --control-plane-address 127.0.0.1 \
-  --http-port 8080 \
-  --grpc-port 9090
-
-atelctl config set-context local --cluster local
-atelctl config use-context local
-
-atelctl config current-context
-atelctl config get-contexts
-```
-
-## Fixed paths
-
-| What | Path |
-|------|------|
-| API binary | `/usr/local/bin/atellar-api` |
-| API env (systemd) | `/etc/atellar/api.env` |
-| API migrations | `/usr/share/atellar/migrations` |
-| Agent binary | `/usr/local/bin/atelagent` |
-| Agent systemd unit | `/etc/systemd/system/atellar-agent.service` |
-| Agent config | `/etc/atellar/agent.json` |
-| Agent logs | `/var/log/atellar` |
-
-## server install
-
-Requires root. Writes secrets to `/etc/atellar/api.env` and installs `atellar-api.service`.
-
-```bash
-sudo ateladm server install \
-  --database-url "postgresql://postgres:secret@localhost:5432/atellar_cp?sslmode=disable" \
-  --migrations-path /usr/share/atellar/migrations \
-  --port 8080 --grpc-port 9090
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--database-url` | *(required)* | PostgreSQL DSN |
-| `--migrations-path` | `/usr/share/atellar/migrations` | SQL migrations dir |
-| `--port` | `8080` | HTTP port |
+| Flag | Default | |
+|------|---------|---|
+| `--database-url` | required | PostgreSQL connection string |
+| `--migrations-path` | `/usr/share/atellar/migrations` | SQL migrations |
+| `--bind-address` | all interfaces | Listen address |
+| `--http-port` | `8080` | HTTP port |
 | `--grpc-port` | `9090` | gRPC port |
-| `--cluster-overlay-cidr` | `10.0.0.0/8` | Overlay CIDR |
-| `--node-subnet-prefix-len` | `24` | Per-node subnet prefix |
-| `--start` | `true` | `systemctl restart` after install |
+| `--cluster-cidr` | `10.0.0.0/8` | IPv4 range split into node subnets |
+| `--node-subnet-prefix` | `24` | Prefix length of each node subnet |
+| `--node-stale-after` | `30s` | Heartbeat age that marks a node `not_ready` |
+| `--admin-token` | generated | Admin token |
+| `--open` | `false` | Run without an admin token (trusted networks only) |
+| `--start` | `true` | Start the service after installing |
 
-Env template: `cmd/api/.env.example`
+### `atellar node install`
 
-## Required join flags
+Installs and enables `atellar-agent.service`. The service starts once
+`node join` has written the agent configuration.
 
-- `--join-token`
-- `--name`
-- `--public-ip`
-- `--private-ip`
+### `atellar node join`
 
-Same flags are required on **`ateladm node install --auto-join`**.
+Registers the machine with the API server, writes `/etc/atellar/agent.json`
+(mode 0600) and restarts the agent if its unit is installed.
 
-Endpoint flags are optional when a current context is configured:
+| Flag | Default | |
+|------|---------|---|
+| `--join-token` | required | Token from `atellar join-tokens create` |
+| `--name` | required | Node name, unique in the cluster |
+| `--private-ip` | required | Address other nodes reach this node on; carries VXLAN traffic |
+| `--control-plane-address` | required | API server host or IP |
+| `--http-port` | `8080` | API server HTTP port |
+| `--grpc-port` | `9090` | API server gRPC port |
+| `--transport` | `grpc` | Transport the agent uses: `grpc` or `http` |
+| `--public-ip` | | Informational |
+| `--containerd-sock` | `/run/containerd/containerd.sock` | containerd socket |
+| `--heartbeat-interval` | `5s` | Agent heartbeat interval |
 
-- `--control-plane-address`
-- `--http-port`
-- `--grpc-port`
+### `atellar node renew-key`
 
-`cluster` commands use the current context by default.
+Requests a new node API key, writes it to the agent configuration and restarts
+the agent. The agent also renews its key on its own seven days before expiry.
 
-## Flow
+### `atellar server run`, `atellar agent run`
 
-```bash
-sudo ateladm node install \
-  --auto-join \
-  --join-token <TOKEN> \
-  --name node-1 \
-  --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5
+The processes systemd starts. `server run` reads its configuration from the
+environment (see [config.md](config.md)), applies migrations and serves.
+`agent run --agent-config PATH` runs the node agent.
 
-# or separate
-sudo ateladm node install
-ateladm node join \
-  --join-token <TOKEN> \
-  --name node-1 \
-  --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5
-```
-
-## Cluster
-
-```bash
-atelctl cluster nodes list
-atelctl cluster containers list
-```
-
-## Release install / uninstall
-
-Each GitHub release includes `install.sh` and `uninstall.sh` (also under `scripts/release/` in the repo).
-
-`install.sh` only installs binaries and migrations. Auto-detects `linux/amd64` or `linux/arm64` from the universal tarball. It does not start services.
+## Client configuration
 
 ```bash
-# from a release tag (version baked in — no prompt)
-curl -fsSL https://github.com/hasirciogluhq/atellar/releases/download/v0.1.0/install.sh | sudo bash
-
-# latest release
-curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
-
-# from extracted tarball
-sudo ./install.sh --local
-
-# remove everything (api, agent service, ateladm, atelctl, config, migrations, workloads)
-sudo ./uninstall.sh --yes
+atellar config set-cluster NAME --address HOST [--http-port 8080] [--grpc-port 9090] [--transport grpc|http] [--token TOKEN]
+atellar config set-context NAME --cluster CLUSTER
+atellar config use-context NAME
+atellar config current-context
+atellar config get-contexts
 ```
 
-`uninstall.sh` does **not** delete the node from control plane PostgreSQL — use the evict API on the control plane.
+## Operating the cluster
 
-Maintainers: push a `v*` tag — GitHub Actions builds `atellar_<ver>_linux.tar.gz` (amd64 + arm64 inside) and publishes `install.sh`. Local: `./scripts/release/build-all.sh v0.1.0`.
+| Command | Does |
+|---------|------|
+| `atellar nodes list` | List nodes |
+| `atellar nodes get NODE` | Show one node (ID or name) |
+| `atellar nodes evict NODE` | Evict a node, revoke its key, free its subnet |
+| `atellar nodes overlay-ips NODE [--free]` | List a node's overlay addresses |
+| `atellar nodes watch` | Stream node changes |
+| `atellar join-tokens create [--ttl 24h] [--multi-use]` | Create a join token |
+| `atellar join-tokens list` | List join tokens |
+| `atellar containers create --image REF [flags]` | Schedule a container |
+| `atellar containers list [--node ID] [--active]` | List containers |
+| `atellar containers get ID` | Show one container |
+| `atellar containers delete ID` | Stop and remove a container |
+| `atellar containers events ID` | Lifecycle history, newest first |
+| `atellar containers watch [--node ID]` | Stream container changes |
+| `atellar version` | Print the version |
 
-## Related code
+`containers create` flags:
 
-- `scripts/release/install.sh`, `scripts/release/uninstall.sh`, `scripts/release/package.sh`
-- `pkg/client/controlplane.go` — `ControlPlane`, `HTTPBaseURL()`, `GRPCAddr()`
-- `internal/agent/config/` — persisted agent config
+| Flag | Default | |
+|------|---------|---|
+| `--image` | required | Image reference, e.g. `docker.io/library/nginx:1.27` |
+| `--cpu` | none | CPU limit in cores |
+| `--memory` | none | Memory limit in MiB |
+| `--env KEY=VALUE` | | Repeatable |
+| `--command` | image CMD | Arguments that replace the image CMD |
+| `--restart` | `on-failure` | `no`, `on-failure` or `always` |

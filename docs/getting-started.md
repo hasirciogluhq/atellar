@@ -1,142 +1,114 @@
-# Getting Started
+# Getting started
+
+This walks through a cluster with one API server and two nodes. All machines
+must be Linux (amd64 or arm64) and reach each other on a private network.
 
 ## Requirements
 
-- Go 1.25+
-- PostgreSQL
-- (On nodes) containerd — for agent container workloads
-- Node `private_ip` values that can reach each other for multi-node experiments (same underlay, VPC, or manually managed WireGuard)
+| Machine | Needs |
+|---------|-------|
+| API server | PostgreSQL reachable from it (the test suite runs against 16) |
+| Every node | containerd running, `iproute2` (`ip`, `bridge`), root access, UDP 4789 open between nodes |
 
-## 1. Install binaries
+## 1. Install the binary
+
+On every machine:
 
 ```bash
-# latest release
 curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
 ```
 
-Installs:
+This installs `/usr/local/bin/atellar` and the database migrations under
+`/usr/share/atellar/migrations`. It does not start anything.
 
-- `/usr/local/bin/atellar-api`
-- `/usr/local/bin/ateladm`
-- `/usr/local/bin/atelctl`
-- `/usr/local/bin/atelagent`
-- `/usr/share/atellar/migrations`
-
-## 2. Start control plane
+## 2. Start the API server
 
 ```bash
-sudo ateladm server install \
-  --database-url "postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable" \
-  --migrations-path /usr/share/atellar/migrations \
-  --port 8080 \
-  --grpc-port 9090
+sudo atellar server install \
+  --database-url "postgresql://atellar:secret@localhost:5432/atellar?sslmode=disable"
 ```
 
-- HTTP: `http://localhost:8080`
-- gRPC: `localhost:9090`
-- systemd unit: `atellar-api.service`
+The command writes `/etc/atellar/api.env`, installs and starts the
+`atellar-server` systemd unit, and prints a generated admin token. Keep the
+token; it is stored only in that file. See [config.md](config.md) for every
+option.
 
-## 3. Configure atelctl context
+## 3. Point the CLI at the cluster
 
-This creates `~/.atellar/config` as JSON.
+On the machine you operate from:
 
 ```bash
-atelctl config set-cluster local \
-  --control-plane-address 127.0.0.1 \
-  --http-port 8080 \
-  --grpc-port 9090
-atelctl config set-context local --cluster local
-atelctl config use-context local
+atellar config set-cluster prod --address 10.0.0.10 --token <ADMIN_TOKEN>
+atellar config set-context prod --cluster prod
+atellar config use-context prod
+atellar nodes list
 ```
 
-## 4. Create join token
+The CLI talks gRPC on port 9090 by default. Add `--transport http` to use the
+HTTP API on port 8080 instead.
+
+## 4. Join nodes
+
+Create a join token:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
-  -H "Content-Type: application/json" \
-  -d '{"single_use": true}'
+atellar join-tokens create
 ```
 
-Save the `token` value from the response. It is shown only once.
-
-## 5. Join node
-
-`ateladm node install` creates dirs + systemd unit. With `--auto-join` it registers the node and writes `/etc/atellar/agent.json`.
-
-Run this on the node machine:
+Tokens are single use and expire after 24 hours unless you pass `--multi-use`
+or `--ttl`. On each node:
 
 ```bash
-sudo ateladm node install --auto-join \
-  --join-token <PLAIN_TOKEN> \
+sudo atellar node install
+sudo atellar node join \
+  --join-token <TOKEN> \
   --name node-1 \
-  --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5
+  --private-ip 10.0.0.21 \
+  --control-plane-address 10.0.0.10
 ```
 
-If no atelctl context exists on the node, pass endpoint flags:
+`node join` registers the machine, receives its subnet and API key, writes
+`/etc/atellar/agent.json` and starts the agent. `--private-ip` is the address
+other nodes use for VXLAN traffic.
 
 ```bash
-sudo ateladm node install --auto-join \
-  --join-token <PLAIN_TOKEN> \
-  --control-plane-address <cp-host> \
-  --http-port 8080 \
-  --grpc-port 9090 \
-  --name node-1 \
-  --public-ip 203.0.113.10 \
-  --private-ip 10.0.0.5
+atellar nodes list
 ```
 
-`private-ip` is recorded on the node and is the intended data-plane address for multi-node routing. Use the LAN/VPC IP, or your WireGuard IP if you manage WireGuard manually.
+A node is `ready` as soon as it joins. The scheduler places containers on it
+once its agent has reported CPU and memory, which happens when the agent starts.
 
-## 6. Verify
+## 5. Run a container
 
 ```bash
-# List nodes
-atelctl cluster nodes list
-# or: curl http://localhost:8080/api/v1/nodes
-
-# Agent logs
-journalctl -u atellar-agent.service -f
+atellar containers create --image docker.io/library/nginx:1.27 --cpu 0.5 --memory 256
+atellar containers list
+atellar containers events <ID>
 ```
 
-On successful connection, API logs show `agent connected node_id=...`.
-
-## 7. Create container (optional)
-
-Scheduler picks a node automatically — no `node_id` in request body.
+Containers on different nodes reach each other on their overlay addresses.
+To remove one:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/containers \
-  -H "Content-Type: application/json" \
-  -d '{
-    "image": "docker.io/library/nginx:alpine"
-  }'
+atellar containers delete <ID>
 ```
 
-Target node receives `workload.dispatch`; peer nodes receive `container.scheduled` for overlay route reconciliation.
+## Running the API server in Docker
 
-Verify on the control plane:
+The repository includes a `Dockerfile` and `docker-compose.yml` that start
+PostgreSQL and the API server with the admin token `dev-admin-token`:
 
 ```bash
-atelctl cluster containers list
+docker compose up --build
+atellar config set-cluster local --address localhost --token dev-admin-token
 ```
 
-`STATUS` should be `running` with an `OVERLAY_IP`. Same-node container networking is the reliable implemented path today. Cross-node container traffic is still experimental because Atellar does not create a tunnel and does not yet program `private_ip` as the route next hop. If the container is `failed`, check `ERROR` and run diagnostics on the scheduled node — see [networking.md](networking.md).
-
-Delete:
+## Removing Atellar
 
 ```bash
-curl -X DELETE http://localhost:8080/api/v1/containers/<CONTAINER_ID>
+atellar nodes evict node-1                     # from the operator machine
+curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/uninstall.sh | sudo bash
 ```
 
-## Adding a second node
-
-Repeat the join flow. If the first node is connected, it receives `node.added` and reconciles.
-
-## Removing a node
-
-```bash
-curl -X POST http://localhost:8080/api/v1/nodes/<NODE_ID>/evict
-```
-
-The subnet enters the reclaim pool; peers receive `node.removed`.
+The uninstall script stops the units, removes local containers, the overlay
+links, the binary, configuration and logs.

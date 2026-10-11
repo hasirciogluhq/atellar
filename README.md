@@ -1,78 +1,158 @@
 # Atellar
 
-Distributed container orchestration platform. Consists of a **control plane** (API server) and **agent** nodes running on each machine.
+Atellar runs containers across a group of Linux machines. It schedules
+containers onto nodes, gives every container a cluster-routable IPv4 address
+over a VXLAN overlay, restarts containers that exit, and exposes one API over
+HTTP and gRPC.
+
+It is deliberately small: one binary, one PostgreSQL database, containerd on
+each node, no custom resource definitions and no plugin system.
+
+## What it does
+
+- **Scheduling** by CPU, memory and free addresses, spreading containers
+  across nodes and keeping one active copy of an image per node.
+- **Networking**: each node owns a subnet of the cluster range; agents program
+  routes, permanent neighbor entries and VXLAN FDB entries from the node list.
+  No per-container state leaves the node it runs on.
+- **Lifecycle**: image pull, start, exit handling, restart policies (`no`,
+  `on-failure`, `always`) with exponential backoff, and a per-container event
+  history.
+- **Node health**: heartbeats, automatic `not_ready` marking, eviction with
+  key revocation and subnet reuse.
+- **API**: list, get and watch for nodes and containers; watches deliver a
+  snapshot, a bookmark and then live changes. HTTP (JSON, NDJSON streams) and
+  gRPC serve the same methods with the same authorization.
+- **Auth**: an admin token for operators and per-node API keys for agents,
+  hashed at rest, rotated automatically.
 
 ## Quick start
 
 ```bash
-# 1. Install release binaries and migrations
+# Every machine
 curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
 
-# 2. Install and start the control plane (requires PostgreSQL)
-sudo ateladm server install \
-  --database-url "postgresql://postgres:1234@localhost:5432/atellar_cp?sslmode=disable" \
-  --migrations-path /usr/share/atellar/migrations \
-  --port 8080 \
-  --grpc-port 9090
+# API server (prints the admin token)
+sudo atellar server install --database-url "postgresql://atellar:secret@localhost:5432/atellar?sslmode=disable"
 
-# 3. Save a local client context
-atelctl config set-cluster local --control-plane-address 127.0.0.1 --http-port 8080 --grpc-port 9090
-atelctl config set-context local --cluster local
-atelctl config use-context local
+# Operator machine
+atellar config set-cluster prod --address 10.0.0.10 --token <ADMIN_TOKEN>
+atellar config set-context prod --cluster prod
+atellar config use-context prod
+atellar join-tokens create
 
-# 4. Create join token
-curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \
-  -H "Content-Type: application/json" \
-  -d '{"single_use": true}'
+# Every node (containerd must be running)
+sudo atellar node install
+sudo atellar node join --join-token <TOKEN> --name node-1 --private-ip 10.0.0.21 --control-plane-address 10.0.0.10
 
-# 5. Join a node from that node machine
-sudo ateladm node install --auto-join \
-  --join-token <TOKEN> \
-  --name node-1 \
-  --public-ip <PUBLIC_IP> \
-  --private-ip <PRIVATE_OR_WG_IP>
-
-# 6. Inspect from your client machine
-atelctl cluster nodes list
+# Run something
+atellar containers create --image docker.io/library/nginx:1.27 --cpu 0.5 --memory 256
+atellar containers list
 ```
 
-## Components
+The full walkthrough is in [docs/getting-started.md](docs/getting-started.md).
 
-| Component | Binary | Role |
-|-----------|--------|------|
-| **API Server** | `cmd/api` | HTTP `:8080` + gRPC `:9090`, node/container management, overlay IPAM |
-| **atelctl** | `cmd/atelctl` | Client config, contexts, cluster inspection |
-| **ateladm** | `cmd/ateladm` | Server install and node join/install operations |
-| **Agent** | `cmd/atelagent` | gRPC-only: config, stream, heartbeat, overlay reconcile |
+## The `atellar` binary
 
-## Architecture (overview)
+| Command | Purpose |
+|---------|---------|
+| `atellar server install`, `atellar server run` | Install and run the API server |
+| `atellar node install`, `node join`, `node renew-key` | Install and register a node agent |
+| `atellar agent run` | The node agent process |
+| `atellar config ...` | Clusters and contexts for the CLI |
+| `atellar nodes ...` | List, inspect, watch and evict nodes |
+| `atellar containers ...` | Create, list, inspect, watch and delete containers |
+| `atellar join-tokens ...` | Create and list join tokens |
+
+See [docs/cli.md](docs/cli.md).
+
+## Test results
+
+The numbers below come from one run on the current tree: Go 1.25.0,
+linux/amd64, 4 vCPU Intel Xeon @ 2.30GHz, PostgreSQL 16.
 
 ```
-atelctl ──query──────► API Server ◄──gRPC stream── atelagent
-ateladm ──manage─────►     ▲
-                      │
-                   PostgreSQL
-                      │
-              peer notify (reconcile.trigger)
-                      ▼
-              other Agents (route/bridge update)
+$ ATELLAR_TEST_DATABASE_URL=postgres://... go test -race -count=1 ./...
+ok  	github.com/hasirciogluhq/atellar/cmd/atellar/internal/agent
+ok  	github.com/hasirciogluhq/atellar/cmd/atellar/internal/cli
+ok  	github.com/hasirciogluhq/atellar/cmd/atellar/internal/host
+ok  	github.com/hasirciogluhq/atellar/cmd/atellar/internal/server
+ok  	github.com/hasirciogluhq/atellar/cmd/atellar/internal/workload
+ok  	github.com/hasirciogluhq/atellar/pkg/api
+ok  	github.com/hasirciogluhq/atellar/pkg/api/watch
+ok  	github.com/hasirciogluhq/atellar/pkg/apis/core/v1
+ok  	github.com/hasirciogluhq/atellar/pkg/apiserver
+ok  	github.com/hasirciogluhq/atellar/pkg/auth
+ok  	github.com/hasirciogluhq/atellar/pkg/auth/authn
+ok  	github.com/hasirciogluhq/atellar/pkg/auth/authz
+ok  	github.com/hasirciogluhq/atellar/pkg/auth/token
+ok  	github.com/hasirciogluhq/atellar/pkg/client
+ok  	github.com/hasirciogluhq/atellar/pkg/client/informer
+ok  	github.com/hasirciogluhq/atellar/pkg/config/agentconfig
+ok  	github.com/hasirciogluhq/atellar/pkg/config/ctlconfig
+ok  	github.com/hasirciogluhq/atellar/pkg/config/serverconfig
+ok  	github.com/hasirciogluhq/atellar/pkg/controller/nodelifecycle
+ok  	github.com/hasirciogluhq/atellar/pkg/events
+ok  	github.com/hasirciogluhq/atellar/pkg/network/ipam
+ok  	github.com/hasirciogluhq/atellar/pkg/network/netns
+ok  	github.com/hasirciogluhq/atellar/pkg/network/overlay
+ok  	github.com/hasirciogluhq/atellar/pkg/node/hardware
+ok  	github.com/hasirciogluhq/atellar/pkg/runtime/containerd
+ok  	github.com/hasirciogluhq/atellar/pkg/scheduler
+ok  	github.com/hasirciogluhq/atellar/pkg/storage/memory
+ok  	github.com/hasirciogluhq/atellar/pkg/storage/postgres
+ok  	github.com/hasirciogluhq/atellar/pkg/transport
+ok  	github.com/hasirciogluhq/atellar/pkg/transport/grpc/wire
+ok  	github.com/hasirciogluhq/atellar/pkg/transport/http/wire
 ```
 
-On node register, the cluster automatically assigns an **overlay subnet** (`/24`) and **overlay IP**. When containers or nodes change, events are pushed to connected peer nodes.
+| Measure | Result |
+|---------|--------|
+| Tests passed (including table subtests) | 907 |
+| Tests failed or skipped | 0 |
+| Statement coverage, all packages (`-coverpkg=./...`) | 76.3% |
+| Authorization matrix | 21 cases covering all 19 API methods, x 5 callers (anonymous, admin, owning node, other node, bad token), x closed and open mode, x HTTP and gRPC |
 
-Current networking creates the per-node bridge, container netns/veth pairs, overlay IPAM, and peer route reconciliation triggers. Atellar does **not** create VXLAN, WireGuard, or another node-to-node tunnel. Cross-node container traffic should be treated as experimental until route reconciliation uses node `private_ip` as the data-plane next hop. For multi-node tests, keep node `private_ip` values mutually reachable; use same LAN/VPC addresses or WireGuard IPs that you manage outside Atellar.
+Coverage is lowest where code needs root, containerd or kernel devices
+(`pkg/runtime/containerd`, `pkg/network/netns`, the iproute2 dataplane); those
+are tested through fakes and their pure helpers. How the suite is organized is
+described in [docs/development.md](docs/development.md).
+
+### Transport latency
+
+One authenticated `Nodes.Get` call over loopback, including authentication,
+authorization and an in-memory store read
+(`go test -run '^$' -bench . -benchtime 3s ./pkg/transport/`):
+
+| Benchmark | Time per call | Allocations |
+|-----------|---------------|-------------|
+| HTTP, one goroutine | 86.6 us | 116 |
+| gRPC, one goroutine | 140.0 us | 222 |
+| HTTP, 4 goroutines, shared client | 20.2 us | 115 |
+| gRPC, 4 goroutines, shared client | 43.5 us | 211 |
+
+These measure the transport and API layers only, not PostgreSQL.
 
 ## Documentation
 
-For detailed usage, config, and architecture:
-
-- [Overview & architecture](docs/architecture.md)
+- [Architecture](docs/architecture.md)
 - [Getting started](docs/getting-started.md)
-- [atelctl](docs/cli.md)
-- [Agent](docs/agent.md)
-- [API server](docs/api-server.md)
-- [Config & environment](docs/config.md)
-- [Peer events (node + container)](docs/peer-events.md)
-- [Code layout & dependencies](docs/code-layout.md)
+- [CLI reference](docs/cli.md)
+- [API](docs/api.md)
+- [Node agent](docs/agent.md)
+- [Networking](docs/networking.md)
+- [Configuration](docs/config.md)
+- [Development](docs/development.md)
 
-Source: [github.com/hasirciogluhq/atellar](https://github.com/hasirciogluhq/atellar)
+## Status
+
+Atellar is early software. IPv4 only, nodes must share a directly reachable
+underlay, and there is no persistent storage for containers yet.
+
+## License
+
+Free for individuals, non-profits, and organizations with annual gross revenue
+below **USD 1,000,000**. Organizations at or above that threshold need a
+commercial license for production use. This is a source-available license,
+not an OSI-approved open source license. See [LICENSE](LICENSE) for the
+binding terms.

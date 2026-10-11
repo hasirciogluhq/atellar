@@ -1,16 +1,31 @@
+# Local API server with PostgreSQL.
+#   docker compose up --build
+# Then: atellar config set-cluster local --address localhost --token dev-admin-token
 services:
-  api:
-    build:
-      context: .
-      dockerfile: cmd/api/Dockerfile
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: atellar
+      POSTGRES_PASSWORD: atellar
+      POSTGRES_DB: atellar
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atellar"]
+      interval: 2s
+      retries: 30
+
+  server:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
       - "9090:9090"
     environment:
-      DATABASE_URL: postgresql://postgres:1234@host.docker.internal:5432/atellar_test?sslmode=disable
-      MIGRATIONS_PATH: /usr/share/atellar/migrations
-      PORT: "8080"
-      GRPC_PORT: "9090"
+      DATABASE_URL: postgresql://atellar:atellar@postgres:5432/atellar?sslmode=disable
+      ADMIN_TOKEN: dev-admin-token
       CLUSTER_OVERLAY_CIDR: 10.0.0.0/8
       NODE_SUBNET_PREFIX_LEN: "24"
 

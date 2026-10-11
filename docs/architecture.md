@@ -1,94 +1,79 @@
 # Architecture
 
-## Overview
+Atellar runs containers on a set of Linux machines. It has two processes, both
+started from the single `atellar` binary:
 
-Atellar consists of two layers:
+- **API server** (`atellar server run`): stores cluster state in PostgreSQL,
+  authenticates callers, schedules containers, allocates network addresses and
+  streams changes to watchers.
+- **Node agent** (`atellar agent run`): one per machine. It keeps the node
+  alive in the API server, builds the overlay network and runs the node's
+  containers through containerd.
 
-1. **Control Plane** — central API server. Node registration, overlay IP allocation, container state, peer notifications.
-2. **Agent Node** — runs on each worker machine. Connects to the control plane via gRPC; handles container lifecycle and overlay network reconciliation.
-
-```
-┌─────────────┐     HTTP      ┌──────────────────┐
-│  atelctl    │──────────────►│   API Server     │
-│ cluster ops │    query      │  :8080 / :9090   │
-└─────────────┘               └────────┬─────────┘
-┌─────────────┐     HTTP               │
-│  ateladm    │──────────────► register│
-│ node join   │                        │
-└─────────────┘                        │
-                                       │
-┌─────────────┐     gRPC bidi          │ PostgreSQL
-│ atelagent   │◄──────────────────────┤
-│             │  Connect + heartbeat   │
-└─────────────┘                        │
-       ▲                               │
-       │ reconcile.trigger             │
-       └───────────────────────────────┘
-              (push to peer nodes)
-```
-
-## Control plane responsibilities
-
-- Join token issuance and node registration
-- Per-node overlay subnet/IP allocation (IPAM)
-- Reclaiming evicted node subnets
-- Container CRUD and lifecycle state
-- Async peer event push to connected agents (`reconcile.trigger`)
-
-## Agent responsibilities
-
-- Read `/etc/atellar/agent.json`
-- gRPC `Connect` stream (heartbeat, RPC receive)
-- Automatic API key renewal (7 days before expiry)
-- Apply peer events and reconcile overlay bridge/routes (Linux: `ip` commands)
-- Runtime communication with control plane uses gRPC. Registration is performed before daemon start by `ateladm node join` over HTTP.
-
-## Auth model
-
-| Phase | Credential | Usage |
-|-------|------------|-------|
-| Before registration | Join token (plain, shown once) | `POST /nodes/register?token=` |
-| After registration | Node API key (Bearer, 90-day TTL) | gRPC stream, API key renewal |
-
-API keys are stored in the DB as SHA-256 hashes.
-
-## Overlay network
-
-- Cluster CIDR: `10.0.0.0/8` (default)
-- Node subnet: `/24` (default)
-- First host IP in each subnet is the node overlay IP
-- Remaining IPs are assigned to containers via `overlay_ip_pool`
-- Evicted node subnets are reclaimed on the next registration
-
-Per-node bridge + per-container veth/netns: [networking.md](networking.md).
-
-Atellar does not create WireGuard or VXLAN. Current code reconciles local bridge state and peer route events, but cross-node traffic is still experimental because the Linux route manager does not yet use peer `private_ip` as the next hop.
-
-## Infrastructure wiring
-
-`internal/controlplane/bootstrap/infrasturcture.go` creates on startup:
+Operators use the same binary as a client (`atellar nodes list`,
+`atellar containers create`, ...).
 
 ```
-Database → sqlc Queries
-  → NodeRepository
-  → ContainerRepository
-  → NodeAuthenticator
-  → Authorizer
-  → AgentRegistry (connected gRPC streams)
-  → PeerNotifier (node + container events)
-  → OverlayProvisioner (IPAM + pool seed)
+                +-------------------------------+
+  atellar CLI ->|  API server                   |
+                |  HTTP :8080   gRPC :9090      |
+                |  authn/authz, scheduler, IPAM |
+                |  node lifecycle controller    |
+                +---------------+---------------+
+                                | PostgreSQL
+              list + watch      |
+        +-----------------------+-----------------------+
+        |                                               |
+  +-----v------+   VXLAN (UDP 4789) between nodes  +----v-------+
+  | agent      |<--------------------------------->| agent      |
+  | containerd |                                   | containerd |
+  +------------+                                   +------------+
 ```
 
-The gRPC server receives registry and auth via separate `Deps` (avoids import cycles).
+## One API, several transports
 
-## Module structure
+`pkg/api` defines the API once as a Go interface (`api.Interface`). The API
+server implements it in `pkg/apiserver`. `pkg/transport` carries that interface
+over HTTP (JSON, newline delimited watch streams) and over gRPC (a JSON codec,
+server streaming watches). A client picks a transport and gets the same
+`api.Interface` back, so the CLI, the agent and the tests do not depend on the
+wire format. A TCP transport is reserved and returns `ErrNotImplemented`.
 
-Each domain module (nodes, containers) has these layers:
+## State and change propagation
 
-- `domain/` — entities, rules
-- `application/usecases/` — workflows
-- `application/services/` — cross-cutting services (overlay provisioner)
-- `infrastructure/repositories/` — sqlc/PostgreSQL
-- `ports/` — interfaces
+The API server is the only writer of cluster state. Every write publishes an
+event on an in-process broker (`pkg/events`). Watch calls subscribe to the
+broker, send the current objects as `ADDED` events, send one `BOOKMARK`, then
+forward each change. Clients use `pkg/client/informer`, which keeps a local
+cache, re-lists on reconnect and backs off exponentially on failure.
 
-Full layout and dependency rules: [code-layout.md](code-layout.md)
+The agent runs two informers:
+
+- **nodes**: every node in the cluster. Feeds the overlay network.
+- **containers**: containers on this node. Feeds the workload manager.
+
+The workload manager also lists its containers every 15 seconds, so a missed
+event delays work but does not lose it.
+
+## Scheduling
+
+`pkg/scheduler` picks a node for a new container. A node qualifies when it is
+`ready`, has reported its hardware, has enough CPU and memory left for the
+requested limits, has a free overlay address, and does not already run an
+active container with the same image. Among qualifying nodes the one with the
+fewest running containers wins.
+
+## Node lifecycle
+
+Agents send a heartbeat every 5 seconds. The node lifecycle controller
+(`pkg/controller/nodelifecycle`) marks a `ready` node `not_ready` once its last
+heartbeat is older than `NODE_STALE_AFTER` (30 seconds by default). The next
+heartbeat makes it `ready` again. Evicting a node revokes its API key and
+releases its subnet for reuse.
+
+## Storage
+
+`pkg/storage` defines the persistence interface. `pkg/storage/postgres` is the
+production implementation (pgx, queries generated by sqlc, migrations applied
+at start). `pkg/storage/memory` is an in-memory implementation used by tests.
+Both pass the same conformance suite in `pkg/storage/storagetest`.

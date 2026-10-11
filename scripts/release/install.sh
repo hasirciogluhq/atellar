@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Atellar release installer — downloads and installs binaries only.
-# Does not start services or run atelctl.
+# Atellar release installer. Downloads and installs the atellar binary and the
+# database migrations. It does not start any service.
 #
 #   curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
 #   curl -fsSL .../install.sh | sudo bash -s -- --version v0.1.0
@@ -32,9 +32,9 @@ usage() {
   cat <<'EOF'
 Atellar install.sh
 
-Installs atellar-api, atelagent, ateladm, atelctl and DB migrations.
+Installs the atellar binary and the database migrations.
 Auto-detects linux/amd64 or linux/arm64 from the universal release tarball.
-Does not start any service — configure and run manually after install.
+Does not start any service; see the next steps printed after install.
 
 Options:
   --version <tag>   install specific version (e.g. v0.1.0)
@@ -182,16 +182,11 @@ fi
 BIN_DIR="$(resolve_bin_dir "${WORK_DIR}" "${ARCH}")"
 echo "binary source: ${BIN_DIR}"
 
-for bin in atellar-api atelagent ateladm atelctl; do
-  [[ -f "${BIN_DIR}/${bin}" ]] || die "binary not found: ${BIN_DIR}/${bin}"
-done
+[[ -f "${BIN_DIR}/atellar" ]] || die "binary not found: ${BIN_DIR}/atellar"
 [[ -d "${WORK_DIR}/migrations" ]] || die "migrations not found: ${WORK_DIR}/migrations"
 
-echo "installing binaries (linux/${ARCH})..."
-install -m 0755 "${BIN_DIR}/atellar-api" "${INSTALL_BIN}/atellar-api"
-install -m 0755 "${BIN_DIR}/atelagent" "${INSTALL_BIN}/atelagent"
-install -m 0755 "${BIN_DIR}/ateladm" "${INSTALL_BIN}/ateladm"
-install -m 0755 "${BIN_DIR}/atelctl" "${INSTALL_BIN}/atelctl"
+echo "installing atellar (linux/${ARCH})..."
+install -m 0755 "${BIN_DIR}/atellar" "${INSTALL_BIN}/atellar"
 
 echo "installing migrations..."
 mkdir -p "${INSTALL_SHARE}"
@@ -211,43 +206,32 @@ cat <<EOF
 Atellar v${INSTALLED_VERSION#v} installed (linux/${ARCH}).
 
 Installed files:
-  ${INSTALL_BIN}/atellar-api
-  ${INSTALL_BIN}/atelagent
-  ${INSTALL_BIN}/ateladm
-  ${INSTALL_BIN}/atelctl
+  ${INSTALL_BIN}/atellar
   ${INSTALL_SHARE}/migrations
-  ${CONFIG_DIR}/          (config directory)
-  ${LOG_DIR}/             (log directory)
+  ${CONFIG_DIR}/          (configuration)
+  ${LOG_DIR}/             (container logs)
 
 Next steps:
 
-  # 1) Control plane (requires PostgreSQL)
-  ateladm server install \\
-    --database-url "postgresql://user:pass@localhost:5432/atellar_cp?sslmode=disable" \\
-    --migrations-path "${INSTALL_SHARE}/migrations" \\
-    --port 8080 --grpc-port 9090
+  # 1) API server (needs PostgreSQL). Prints the generated admin token.
+  sudo atellar server install \\
+    --database-url "postgresql://user:pass@localhost:5432/atellar?sslmode=disable"
 
-  # Or run manually: see cmd/api/.env.example
+  # 2) Point the CLI at the API server
+  atellar config set-cluster default --address <API_HOST> --token <ADMIN_TOKEN>
+  atellar config set-context default --cluster default
+  atellar config use-context default
 
-  # 2) Save client/admin context
-  atelctl config set-cluster default --control-plane-address <CP_HOST> --http-port 8080 --grpc-port 9090
-  atelctl config set-context default --cluster default
-  atelctl config use-context default
+  # 3) Create a join token
+  atellar join-tokens create
 
-  # 3) Create join token
-  curl -X POST http://localhost:8080/api/v1/nodes/join-tokens \\
-    -H "Content-Type: application/json" \\
-    -d '{"single_use": true}'
+  # 4) On every node (containerd must be running)
+  sudo atellar node install
+  sudo atellar node join --join-token <TOKEN> --name node-1 \\
+    --private-ip <PRIVATE_IP> --control-plane-address <API_HOST>
 
-  # 4) Install agent and join cluster
-  ateladm node install --auto-join \\
-    --join-token <TOKEN> \\
-    --name node-1 \\
-    --public-ip <PUBLIC_IP> \\
-    --private-ip <PRIVATE_IP>
-
-  # 5) Cluster status
-  atelctl cluster nodes list
+  # 5) Check the cluster
+  atellar nodes list
 
 Documentation: https://github.com/${GITHUB_REPO}/blob/main/docs/getting-started.md
 

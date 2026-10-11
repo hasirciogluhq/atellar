@@ -1,0 +1,81 @@
+Atellar License 1.0
+
+Copyright (c) 2026 hasirciogluhq
+
+==========================================================================
+REVENUE THRESHOLD: USD 1,000,000 (one million United States dollars)
+of annual gross revenue, as defined in section 4.
+==========================================================================
+
+1. Grant
+
+Subject to the conditions below, the licensor grants you a worldwide,
+royalty-free, non-exclusive, non-transferable license to use, copy, modify,
+and distribute the software and your modifications of it (the "Software"),
+in source or binary form, for any purpose, including commercial purposes.
+
+2. Who may use the Software for free
+
+The license in section 1 is free of charge for:
+
+  a. individuals;
+  b. non-profit organizations, educational institutions and government
+     bodies; and
+  c. any other organization whose annual gross revenue, together with that
+     of all its affiliates, is below the Revenue Threshold.
+
+3. Organizations at or above the Revenue Threshold
+
+An organization whose annual gross revenue, together with that of all its
+affiliates, is at or above the Revenue Threshold may evaluate the Software
+for up to 30 days. Any other use by such an organization, including
+production use and use to provide services to others, requires a separate
+commercial license from the licensor. Contact the licensor through
+https://github.com/hasirciogluhq/atellar to obtain one.
+
+If an organization reaches the Revenue Threshold while using the Software
+under section 2, it has 60 days from the end of the fiscal year in which it
+reached the threshold to obtain a commercial license or stop using the
+Software.
+
+4. Definitions
+
+"Annual gross revenue" means total revenue from all sources, before any
+deductions, in the organization's most recently completed fiscal year,
+converted to United States dollars at the exchange rate in effect on the
+last day of that fiscal year.
+
+"Affiliate" means any entity that controls, is controlled by, or is under
+common control with the organization, where "control" means ownership of
+more than 50% of the voting interests or the power to direct management.
+
+5. Conditions
+
+  a. Every copy or substantial portion of the Software you distribute must
+     include this license text and the copyright notice above.
+  b. You may not remove or change the Revenue Threshold, or relicense the
+     Software under terms that drop sections 2 and 3.
+  c. Your use under this license ends automatically if you break its terms.
+     It is reinstated if you stop the breach and, where section 3 applies,
+     obtain a commercial license within 30 days of written notice from the
+     licensor.
+
+6. Contributions
+
+Unless you state otherwise in writing, you license any contribution you
+submit to the licensor for inclusion in the Software under the same terms as
+this license, and you grant the licensor the right to also offer it under
+commercial licenses.
+
+7. No warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+8. Limitation of liability
+
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.

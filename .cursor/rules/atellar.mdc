@@ -1,111 +1,70 @@
 ---
-description: Atellar project conventions — layout, atelctl, agent, client, code style
+description: Atellar project conventions (layout, CLI, API, tests, style)
 alwaysApply: true
 ---
 
 # Atellar conventions
 
-## Code style
+## Style
 
-- Minimal, modern, solid code. Do **not** over-split files or abstractions.
-- Match existing naming and patterns. Read files before editing.
-- Docs and code comments: **English**. User-facing chat: **Turkish**.
-- Do not auto-commit unless explicitly asked.
+- Minimal, solid Go. Do not split files or add abstractions without a reason.
+- Match existing naming and patterns. Read a file before editing it.
+- Docs and code comments are English. No em-dashes in docs or comments.
+- Every feature ships with tests. Prefer table driven tests.
 
-## Repository layout
+## Layout
 
-```
-cmd/api          control plane
-cmd/agent        node agent (atellar-agent)
-cmd/atelctl      operator CLI
-internal/modules nodes, containers (domain)
-internal/agent   everything on-node (config, grpcclient, overlay, runtime)
-internal/atelctl atelctl command logic
-internal/cluster/ipam  control-plane overlay IPAM only
-internal/grpc    server, agentregistry, gen
-pkg/client       global HTTP API client (extend stub; no internal/client/controlplane)
-```
-
-**Dependency direction: top → down.** `agent/*` must NOT import `modules/*` or domain entities. Agent overlay uses local DTOs.
-
-**Never** put node network code under `pkg/` or a generic `internal/pkg/`. Future: `internal/agent/netns`, `internal/agent/vmnet`.
-
-## Transport split (never ask again)
-
-| Component | Transport |
-|-----------|-----------|
-| `atellar-agent` | **gRPC only** to control plane — never HTTP |
-| `atelctl`, `pkg/client` | **HTTP only** via `pkg/client.AtellarClient` |
-| Control plane | HTTP `:8080` + gRPC `:9090` |
-
-Deploy/delete containers: HTTP `POST/DELETE /api/v1/containers` via `pkg/client`. Agent uses gRPC: `GetNodeWorkloads`, `ReportContainerRuntime`, `AllocateContainerOverlayIP`, `ReportNodeHardware`.
-
-## pkg/client
-
-- Build on `pkg/client/client.go` stub (`AtellarClient`, `Token`, `Secret`, `EnsureToken()`).
-- Single global HTTP client for all external API calls. Own JSON DTOs in `pkg/client/types.go` — do not import `internal/modules`.
-- No separate `internal/client/controlplane` package.
-
-## atelctl CLI
-
-Binary name: **atelctl** (`cmd/atelctl`). Structure: `atelctl <domain> <action>`.
+Only `cmd/` and `pkg/` at the top level.
 
 ```
-atelctl server install
-atelctl agent install|join|renew-key
-atelctl cluster nodes list|containers list
+cmd/atellar                 the single atellar binary
+cmd/atellar/internal/cli    cobra commands
+cmd/atellar/internal/server API server process (atellar server run)
+cmd/atellar/internal/agent  node agent process (atellar agent run)
+cmd/atellar/internal/workload  container lifecycle on a node
+cmd/atellar/internal/host   files and systemd units for install commands
+pkg/api                     api.Interface, errors, watch
+pkg/apis/core/v1            API types and validation
+pkg/apiserver               api.Interface implementation (authz, scheduling, IPAM)
+pkg/transport               HTTP and gRPC servers and clients (TCP is a stub)
+pkg/storage                 storage.Interface, memory and postgres stores
+pkg/network                 ipam, overlay (VXLAN), netns
+pkg/client, pkg/client/informer, pkg/controller, pkg/config, pkg/auth
 ```
 
-### agent install
+No domain/usecase/port layering and no CRDs.
 
-- Creates `/etc/atellar`, `/var/log/atellar`, systemd unit `atellar-agent.service`, enables service.
-- Expects binary already at **`/usr/local/bin/atellar-agent`** — no `--agent-bin`, no `--target`, no `--config` flags.
-- `--auto-join`: after install, chain directly into `Join()` (same code path as `agent join`).
-- With `--auto-join`, required flags: `--join-token`, `--name`, `--public-ip`, `--private-ip`, `--control-plane-address`, `--http-port`, `--grpc-port`.
+## CLI
 
-### agent join
+There is one binary, `atellar`. Do not add other binaries.
 
-- Registers node via HTTP (`http://address:http_port`), writes **`/etc/atellar/agent.json`**, restarts agent.
-- Required: `--join-token`, `--name`, `--public-ip`, `--private-ip`, `--control-plane-address`, `--http-port`, `--grpc-port`.
-- Config fields: `control_plane_address`, `http_port`, `grpc_port` (all required). Agent gRPC dials `address:grpc_port`.
-- Use **`--join-token`** (not `--token`). Use `pkg/client.ControlPlane` for URL/addr helpers.
+```
+atellar server install|run
+atellar node install|join|renew-key
+atellar agent run
+atellar config set-cluster|set-context|use-context|current-context|get-contexts
+atellar nodes list|get|evict|overlay-ips|watch
+atellar containers list|get|create|delete|events|watch
+atellar join-tokens list|create
+atellar version
+```
 
-### cluster commands
+## API
 
-- Required: `--control-plane-address`, `--http-port`, `--grpc-port`.
+- `api.Interface` is defined once in `pkg/api`. Every transport carries all of it.
+- Errors are `*api.Error` with a `Reason`; transports map reasons to status codes and back.
+- Watches send ADDED for the snapshot, one BOOKMARK, then changes.
+- Authorization lives in `pkg/apiserver`; `apiservertest.Cases()` must list every method.
 
-### server install
+## Fixed paths
 
-- Writes `/etc/atellar/api.env` (mode `0600`) and systemd unit `atellar-api.service`.
-- Required: `--database-url`. Defaults: `--migrations-path /usr/share/atellar/migrations`, `--port 8080`, `--grpc-port 9090`.
-- Env template: `cmd/api/.env.example`. Docker: `docker compose up --build` or `docker build -f cmd/api/Dockerfile -t atellar-api .` from repo root.
+| Path | Use |
+|------|-----|
+| `/usr/local/bin/atellar` | binary |
+| `/etc/atellar/api.env` | API server environment |
+| `/usr/share/atellar/migrations` | SQL migrations |
+| `/etc/atellar/agent.json` | agent configuration |
+| `/var/log/atellar` | container logs |
+| `~/.atellar/config` | CLI contexts |
 
-### Fixed paths (no CLI overrides)
-
-| Path | Value |
-|------|-------|
-| API env | `/etc/atellar/api.env` |
-| API migrations | `/usr/share/atellar/migrations` |
-| Agent binary | `/usr/local/bin/atellar-agent` |
-| Agent config | `/etc/atellar/agent.json` |
-| Agent logs | `/var/log/atellar` |
-
-### Naming (CLI vars)
-
-Use descriptive names: `heartbeatInterval`, `controlPlaneAddress`, `httpPort`, `grpcPort`, `nodeName`, `publicIP`, `privateIP`, `containerdSocket`, `joinToken`.
-
-Validation: `client.ControlPlane.Validate()` + `agent.ValidateJoinOptions()`.
-
-## Agent
-
-- Reads only `/etc/atellar/agent.json`. No env vars.
-- Dumb node worker: config + gRPC stream + overlay reconcile + containerd runtime.
-- `containerd_ns` is always internal default **`atellar`** — not exposed in API.
-- Workload sync: push (`workload.dispatch` / `workload.removed`) + 15s poll `GetNodeWorkloads`.
-- Reports every lifecycle step via gRPC `ReportContainerRuntime`. Overlay IP via `AllocateContainerOverlayIP` after create, before start.
-- Hardware: `ReportNodeHardware` on start + every 10 minutes.
-- Config is filled by **`atelctl agent join`** (or install `--auto-join`), not by install alone.
-
-## Docs
-
-Keep `docs/cli.md`, `docs/code-layout.md`, `docs/agent.md` aligned with these rules when changing CLI or layout.
+Keep `docs/` aligned with these rules when changing the CLI, API or layout.
