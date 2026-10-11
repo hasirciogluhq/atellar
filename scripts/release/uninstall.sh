@@ -4,16 +4,17 @@ set -euo pipefail
 # Set at release build time by package.sh (empty in repo).
 RELEASE_VERSION=""
 
-# Removes atellar-api, atelagent, ateladm, atelctl, config, logs, migrations, systemd units.
-# Does NOT remove the node from control plane DB — evict via API separately.
+# Removes the atellar binary, configuration, logs, migrations, systemd units,
+# local containers and overlay links. It does not remove the node from the API
+# server; run `atellar nodes evict <NODE>` for that.
 
 INSTALL_BIN="/usr/local/bin"
 INSTALL_SHARE="/usr/share/atellar"
 CONFIG_DIR="/etc/atellar"
 LOG_DIR="/var/log/atellar"
-API_UNIT="/etc/systemd/system/atellar-api.service"
-AGENT_UNIT="/etc/systemd/system/atelagent.service"
-BRIDGE_NAME="atellar0"
+API_UNIT="/etc/systemd/system/atellar-server.service"
+AGENT_UNIT="/etc/systemd/system/atellar-agent.service"
+LINKS=(atellar-vx atellar0)
 CONTAINERD_NS="atellar"
 
 YES=0
@@ -35,12 +36,12 @@ done
 require_root
 
 if [[ "${YES}" -ne 1 ]]; then
-  echo "this will remove atellar-api, atelagent, ateladm, atelctl, config, logs, migrations, and local workloads."
+  echo "this will remove atellar, its configuration, logs, migrations and local containers."
   read -r -p "continue? [y/N] " reply
   [[ "${reply}" =~ ^[Yy]$ ]] || die "aborted"
 fi
 
-for svc in atelagent atellar-api; do
+for svc in atellar-agent atellar-server; do
   systemctl stop "${svc}" 2>/dev/null || true
   systemctl disable "${svc}" 2>/dev/null || true
 done
@@ -60,13 +61,16 @@ if command -v ctr >/dev/null 2>&1; then
   fi
 fi
 
-if command -v ip >/dev/null 2>&1 && ip link show "${BRIDGE_NAME}" >/dev/null 2>&1; then
-  ip link set "${BRIDGE_NAME}" down 2>/dev/null || true
-  ip link del "${BRIDGE_NAME}" 2>/dev/null || true
+if command -v ip >/dev/null 2>&1; then
+  for link in "${LINKS[@]}"; do
+    ip link show "${link}" >/dev/null 2>&1 || continue
+    ip link set "${link}" down 2>/dev/null || true
+    ip link del "${link}" 2>/dev/null || true
+  done
 fi
 
 rm -rf "${CONFIG_DIR}" "${LOG_DIR}" "${INSTALL_SHARE}"
-rm -f "${INSTALL_BIN}/atellar-api" "${INSTALL_BIN}/atelagent" "${INSTALL_BIN}/ateladm" "${INSTALL_BIN}/atelctl"
+rm -f "${INSTALL_BIN}/atellar"
 
 if [[ -n "${RELEASE_VERSION}" ]]; then
   echo "Atellar v${RELEASE_VERSION#v} uninstalled."

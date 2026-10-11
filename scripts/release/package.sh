@@ -39,10 +39,9 @@ build_binaries() {
   (
     cd "${REPO_ROOT}"
     export GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0
-    go build -trimpath -ldflags="-s -w" -o "${out_dir}/atellar-api" ./cmd/api
-    go build -trimpath -ldflags="-s -w" -o "${out_dir}/atelagent" ./cmd/atelagent
-    go build -trimpath -ldflags="-s -w" -o "${out_dir}/ateladm" ./cmd/ateladm
-    go build -trimpath -ldflags="-s -w" -o "${out_dir}/atelctl" ./cmd/atelctl
+    go build -trimpath \
+      -ldflags="-s -w -X github.com/hasirciogluhq/atellar/pkg/version.Version=${VERSION}" \
+      -o "${out_dir}/atellar" ./cmd/atellar
   )
 }
 
@@ -51,7 +50,7 @@ for entry in "${PLATFORMS[@]}"; do
   build_binaries "${goos}" "${goarch}"
 done
 
-cp -a "${REPO_ROOT}/internal/db/migrations/." "${DIST}/migrations/"
+cp -a "${REPO_ROOT}/pkg/storage/postgres/migrations/." "${DIST}/migrations/"
 bake_release_script "${SCRIPT_DIR}/install.sh" "${DIST}/install.sh"
 bake_release_script "${SCRIPT_DIR}/uninstall.sh" "${DIST}/uninstall.sh"
 cp "${DIST}/install.sh" "${ASSETS_DIR}/install.sh"

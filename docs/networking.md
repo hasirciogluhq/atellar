@@ -1,176 +1,84 @@
-# Overlay & Container Networking
+# Networking
 
-Linux agent networking model: per-node bridge (`atellar0`) + veth pairs into per-container network namespaces.
+Every container gets an IPv4 address that is reachable from every other
+container in the cluster. Atellar builds this with a VXLAN overlay, one
+subnet per node and no per-container state outside the owning node.
 
-## IPAM layout
+## Address allocation
 
-| Layer | Source | Example |
-|-------|--------|---------|
-| Cluster CIDR | `CLUSTER_OVERLAY_CIDR` (API) | `10.0.0.0/8` |
-| Node subnet | `/24` per node (`NODE_SUBNET_PREFIX_LEN`) | `10.0.2.0/24` |
-| Node gateway IP | First host in subnet → `overlay_ip` in agent config | `10.0.2.1` |
-| Container IP | `overlay_ip_pool` on that node | `10.0.2.50` |
+The API server owns all address allocation (`pkg/network/ipam`).
 
-On join/register, the control plane assigns `overlay_ip` + `overlay_subnet` and writes them to `/etc/atellar/agent.json`. The overlay manager applies the node IP on `atellar0`; container netns setup uses the same values as the default gateway.
+- `CLUSTER_OVERLAY_CIDR` (default `10.0.0.0/8`) is split into node subnets of
+  `NODE_SUBNET_PREFIX_LEN` bits (default `/24`).
+- `Nodes.Register` gives the joining node the next free subnet. A subnet of an
+  evicted node is reused before a new one is carved.
+- In each subnet the first host address (`.1` for a /24) is the node address,
+  held by the node's bridge. The network address (`.0`) is the node's VTEP
+  address. Every other host address goes into the node's container pool.
+- `Containers.AllocateOverlayIP` takes an address from the pool of the node
+  the container runs on. Termination returns it.
+- Allocation runs inside a database transaction with an advisory lock, so
+  concurrent joins never receive the same subnet.
 
-Current implementation status:
+## Devices on a node
 
-- Creates and reconciles the local bridge address.
-- Creates per-container netns/veth wiring on the scheduled node.
-- Receives peer node/container events and runs route reconciliation.
-- Does **not** create VXLAN, WireGuard, or any other node-to-node tunnel.
-- Does **not yet** program `private_ip` as the cross-node next hop. Multi-node overlay traffic is experimental until this route manager is completed.
+| Device | Default name | Address |
+|--------|--------------|---------|
+| Bridge | `atellar0` | node address with the subnet prefix, e.g. `10.0.3.1/24` |
+| VXLAN | `atellar-vx` | VTEP address `/32`, e.g. `10.0.3.0/32`; VNI 4242, UDP 4789, `nolearning` |
+| veth pair per container | `vh<hash>` on the host, `vp<hash>` in the namespace | container address, default route via the node address |
 
-For multi-node experiments, node `private_ip` values should still be mutually reachable because that is the intended data-plane address. If nodes are not on the same routable underlay, create WireGuard yourself and join each node with its WireGuard IP as `private_ip`.
+The VXLAN device's MAC address is `02:41` followed by the four bytes of the
+subnet address, so every node can compute any other node's MAC from its
+subnet. Bridge, VXLAN and veth MTUs are 1450 by default, which leaves room for
+the 50 byte VXLAN header on a 1500 byte underlay.
 
-## Per-container netns setup
+## Peer entries
 
-`internal/agent/netns/setup_linux.go` (called from `runtime.Manager.runPipeline`):
-
-1. Enable `net.ipv4.ip_forward` on the host
-2. Teardown any stale netns/veth from a previous failed attempt
-3. Create netns + veth pair (host leg → bridge, peer leg → netns)
-4. Assign container address: `{container_overlay_ip}/{subnet_prefix}` (prefix from `overlay_subnet`, default `/32` if missing)
-5. Default route: `via {node_overlay_ip} dev {veth}` — adds `onlink` only when prefix is `/32`
-
-**Required config for reliable routing:**
-
-```json
-{
-  "overlay_ip": "10.0.2.1",
-  "overlay_subnet": "10.0.2.0/24",
-  "bridge_name": "atellar0"
-}
-```
-
-`runtime.NewManager` passes `overlay_ip` and `overlay_subnet` into `netns.Setup` as `NodeOverlayIP` and `NodeOverlaySubnet`. If both are empty and the bridge has no IPv4 address, setup fails with:
+For each other node that has a subnet and an underlay address, the agent
+programs three entries on the VXLAN device:
 
 ```
-node overlay gateway ip is not configured on atellar0
+ip route  replace <peer subnet> via <peer VTEP> dev atellar-vx onlink
+ip neigh  replace <peer VTEP> lladdr <peer MAC> dev atellar-vx nud permanent
+bridge fdb replace <peer MAC> dev atellar-vx dst <peer underlay IP>
 ```
 
-### Common failure: `Nexthop has invalid gateway`
+The peer underlay IP is the peer's private IP, or its public IP when it has no
+private one. Nodes that are `evicting`, `evicted` or `down`, or have no subnet
+yet, get no entries. A `not_ready` node keeps its entries: its containers may
+still be running while only its link to the API server is broken.
 
-| Cause | Fix |
-|-------|-----|
-| `atellar0` has no IPv4 | Ensure agent overlay reconcile ran; check `ip addr show atellar0` |
-| `overlay_ip` missing in `agent.json` | Re-join or `PATCH /api/v1/nodes/:id/overlay`; restart agent |
-| Container `/32` + wrong gateway | Set `overlay_subnet` so container gets `/24` on same L2 segment as bridge |
-| Stale veth/netns from failed run | `ip link del <veth>` + `ip netns del <ctr_id>`; restart agent |
-| `snapshot "...": already exists` | Orphan containerd snapshot from partial create; agent purges on retry (`PurgeState`) — redeploy agent or `ctr -n atellar snapshots rm <id>` |
-| `args must not be empty` (runc) | Deploy specified image only; agent must apply `oci.WithImageConfig` so ENTRYPOINT/CMD come from the image |
+The agent reads the current entries with `ip -j` and `bridge -j`, computes the
+difference against the node list and applies only the changes, in the order
+FDB, neighbors, routes, so a new route never points at an unresolved next
+hop. Entries that are already correct are not touched. The reconcile runs on every node list change and every 30 seconds, so manual
+changes to these entries are repaired.
 
-## Quick diagnostics
+A packet from a container on node A to a container on node B:
 
-Run on the **scheduled node** (not the control plane):
+1. Leaves the container through its veth to `atellar0` on A.
+2. Matches the route for B's subnet, next hop B's VTEP on `atellar-vx`.
+3. The permanent neighbor entry gives B's VXLAN MAC; the FDB entry for that
+   MAC gives B's underlay address.
+4. The kernel encapsulates it in UDP 4789 to B. B decapsulates it on its own
+   `atellar-vx` and routes it to `atellar0` and the container's veth.
+
+## Requirements and limits
+
+- All nodes must reach each other's underlay address directly (same network
+  or routed, no NAT between nodes).
+- UDP 4789 must be open between nodes.
+- `iproute2` must be installed. The agent enables `net.ipv4.ip_forward`.
+- IPv4 only.
+- No network policy or encryption on the overlay yet.
+
+## Inspecting a node
 
 ```bash
-# Node bridge + routes
-ip addr show atellar0
-ip route
-
-# Agent config
-cat /etc/atellar/agent.json | jq '{overlay_ip, overlay_subnet, bridge_name}'
-
-# Container list (uses current atelctl context)
-atelctl cluster containers list
-
-# Per-container netns (replace ctr ID)
-ip netns exec ctr_<id> ip addr
-ip netns exec ctr_<id> ip route
-
-# Agent logs (systemd unit)
-journalctl -u atellar-agent.service -n 100 --no-pager
+ip -d link show atellar-vx
+ip route show dev atellar-vx
+ip neigh show dev atellar-vx
+bridge fdb show dev atellar-vx
+ip netns list
 ```
-
-Expected healthy state on node `10.0.2.1/24`:
-
-```
-# ip addr show atellar0
-inet 10.0.2.1/24 ...
-
-# ip netns exec ctr_xxx ip addr
-inet 10.0.2.50/24 dev vh...
-
-# ip netns exec ctr_xxx ip route
-default via 10.0.2.1 dev vh...
-```
-
-## Cleanup after failed container
-
-```bash
-sudo ip link del vh<hash> 2>/dev/null || true   # host veth name from ip link | grep vh
-sudo ip netns del ctr_<container_id> 2>/dev/null || true
-sudo systemctl restart atellar-agent.service
-```
-
-Delete the failed workload from the control plane, then redeploy.
-
-## Troubleshooting playbooks
-
-Use these prompts when debugging with logs/CLI output attached.
-
-### 1. Container cannot reach gateway / bridge
-
-```
-netns kurulum sonrası container içinden gateway'e ping atılamıyor.
-ip netns exec <id> ip route ve ip addr çıktıları şunlar: [...]
-Bridge: atellar0, gateway: <node_overlay_ip>, container IP: <ip>/<prefix>
-```
-
-Check: veth enslaved to bridge, container address prefix matches node subnet, default route gateway equals `overlay_ip` from agent config.
-
-### 2. Two containers on same node cannot reach each other
-
-```
-Aynı bridge'e bağlı iki container birbirine ping atamıyor.
-ip netns exec ctr1 ping <ctr2_ip> → destination host unreachable
-Her ikisi de atellar0'a bağlı veth pair'leri var.
-```
-
-Check: both containers in same `overlay_subnet`, bridge forwarding (`bridge link show`), no iptables DROP on `FORWARD`, `ip_forward=1`.
-
-### 3. Cross-node overlay traffic fails
-
-```
-Node1 container (<ip1>) → Node2 container (<ip2>) ping atamıyor.
-Each node has an overlay subnet and atellar0 is up.
-Node private_ip values are expected to be mutually reachable, but the current agent does not yet use them as route next hops.
-```
-
-Check: node-to-node underlay reachability first (`ping <peer_private_ip>`), then check whether the current agent route state can resolve the remote container (`ip route get <remote_container_ip>`) and whether control-plane events were delivered (`container.scheduled`). If using WireGuard, verify the peer IP used at join is the WireGuard IP and AllowedIPs include the peer node/container ranges. If the route next hop is not the peer `private_ip`, this is a known current limitation rather than an operator setup issue.
-
-### 4. Stale netns / veth after terminate
-
-```
-Container terminate sonrası ip netns list eski ID'leri gösteriyor.
-Teardown çalışıyor ama ip netns del bazen:
-"Cannot remove namespace file: device or resource busy"
-```
-
-Check: containerd task still holding netns (`ctr tasks list`), orphan veth (`ip link show master atellar0`), manual `ip link del` then `ip netns del`. Agent calls `Teardown` at start of `Setup` for idempotent retries.
-
-### 5. Container cannot reach internet (NAT)
-
-```
-Container bridge/gateway ping OK, 8.8.8.8 unreachable.
-ip_forward=1 set. iptables -L -n -v → [...]
-```
-
-Atellar does not configure NAT by default. For outbound internet from containers, add MASQUERADE on the node's uplink interface (example):
-
-```bash
-iptables -t nat -A POSTROUTING -s 10.0.0.0/8 ! -o atellar0 -j MASQUERADE
-```
-
-Adjust source CIDR and `-o` interface to match your deployment.
-
-## Related code
-
-| Path | Role |
-|------|------|
-| `internal/agent/netns/setup_linux.go` | veth, netns, default route |
-| `internal/agent/runtime/manager.go` | pipeline; passes node overlay into netns |
-| `internal/agent/overlay/` | bridge IP and peer route reconcile |
-| `internal/cluster/ipam/` | control-plane subnet + container IP allocation |
-| `docs/peer-events.md` | `node.*` / `container.scheduled` events |

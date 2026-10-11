@@ -1,70 +1,64 @@
-# Agent
+# Node agent
 
-Binary: `atelagent` (`cmd/atelagent`)
+`atellar agent run` is the node agent. systemd starts it as
+`atellar-agent.service` after `atellar node join` has written
+`/etc/atellar/agent.json`. It reads only that file (see
+[config.md](config.md)).
 
-Node-side process. Reads `/etc/atellar/agent.json` only. Runtime communication with the control plane is gRPC; node registration is done separately by `ateladm node join` over HTTP before the daemon starts.
+## Loops
 
-## Connection
+| Loop | Interval | Does |
+|------|----------|------|
+| Heartbeat | 5s (`heartbeat_interval`) | `Nodes.SelfHeartbeat`; keeps the node `ready` |
+| Hardware | at start, then every 10m | Reports CPU cores, memory, disk, OS, kernel |
+| Key renewal | hourly check | Renews the API key seven days before expiry and saves it to the config file |
+| Node informer | watch | Keeps the node list for the overlay network |
+| Overlay | on change and every 30s | Programs the VXLAN device, routes, neighbors and FDB ([networking.md](networking.md)) |
+| Container informer | watch | Wakes the workload manager on any change to this node's containers |
+| Workload manager | on wake and every 15s | Lists this node's containers and converges containerd to them |
 
-| Field | Use |
-|-------|-----|
-| `control_plane_address` | Host/IP |
-| `http_port` | Written for tooling; atelagent runtime does not use it |
-| `grpc_port` | Agent dials `address:grpc_port` |
+Informers reconnect with exponential backoff (up to 30s) and re-list after a
+reconnect, so an API server restart does not need an agent restart.
 
-```go
-cfg.ResolveGrpcAddr()  // → "cp-host:9090"
-```
+## Running a container
 
-## gRPC API (agent → control plane)
+For a container in `pending` or `scheduled`, the workload manager:
 
-| RPC | Purpose |
-|-----|---------|
-| `Connect` | Heartbeat + `reconcile.trigger` stream |
-| `GetNodeWorkloads` | Poll workloads for this node (15s) |
-| `ReportContainerRuntime` | Report status at every lifecycle step |
-| `AllocateContainerOverlayIP` | Request overlay IP after containerd create |
-| `ReportNodeHardware` | CPU/RAM/disk/hostname on start + every 10m |
-| `RenewNodeAPIKey` | Token renewal |
+1. Reports `pulling` and pulls the image through containerd (namespace
+   `atellar`). An image already present locally is not pulled again.
+2. Reports `creating` with the image digest.
+3. Calls `Containers.AllocateOverlayIP` to get an address from the node's
+   subnet.
+4. Creates a network namespace at `/run/netns/<id>`, a veth pair to the
+   bridge, the address and a default route via the node's bridge address.
+5. Creates the containerd container with the image config, command, env and
+   resource limits (CFS quota for `cpu_limit`, cgroup memory limit for
+   `memory_limit_mib`) and starts its task. Output goes to
+   `/var/log/atellar/<id>.log`.
+6. Reports `running` with the task PID.
 
-Push events on stream: `workload.dispatch`, `workload.removed` (trigger immediate reconcile).
+A failure in any step tears the namespace and containerd state down and
+reports `backoff`, or `failed` when the restart policy is `no`.
 
-## Container runtime pipeline
+Each container is handled by at most one goroutine at a time.
 
-1. `pulling` — image pull (skip if digest matches)
-2. `creating` — prepare containerd container
-3. `AllocateContainerOverlayIP` — CP assigns overlay IP from node pool
-4. veth + netns setup (`internal/agent/netns`) — uses `overlay_ip` / `overlay_subnet` from agent config as gateway and address prefix
-5. `running` — containerd task start + report PID/digest
+## Exits and restarts
 
-`runtime.NewManager` receives `cfg.OverlayIP` and `cfg.OverlaySubnet` from `agent.json` and passes them to `netns.Setup` as `NodeOverlayIP` and `NodeOverlaySubnet`. Without a valid node overlay IP on the bridge, default-route setup fails (`Nexthop has invalid gateway`). See [networking.md](networking.md).
+The agent subscribes to containerd task exit events.
 
-On failure: `backoff` with exponential delay (max 5 retries) → `failed`. CLI `containers list` shows the `ERROR` column.
+| Exit | Status | Restarted when policy is |
+|------|--------|--------------------------|
+| code 0 | `stopped` | `always` |
+| code != 0 | `crashed` | `always`, `on-failure` |
+| task gone while `running` | `crashed` | `always`, `on-failure` |
 
-On `DELETE /containers/:id`: CP sets `removed` → agent terminates, cleans netns/containerd, reports `terminated`.
+Restarts wait 10s, doubling with each restart up to 5 minutes. There is no
+retry limit. The restart count is reported with every attempt and recorded as
+a `restart` event.
 
-## Config example (after join)
+## Deletion
 
-```json
-{
-  "control_plane_address": "cp-host",
-  "http_port": 8080,
-  "grpc_port": 9090,
-  "node_id": "uuid",
-  "node_name": "node-1",
-  "overlay_ip": "10.0.0.1",
-  "overlay_subnet": "10.0.0.0/24",
-  "node_api_key": "hex-key",
-  "api_key_expires_at": "2026-06-07T12:00:00Z",
-  "containerd_sock": "/run/containerd/containerd.sock",
-  "heartbeat_interval": "5s",
-  "bridge_name": "atellar0",
-  "reconcile_interval": "30s"
-}
-```
-
-## Node setup (ateladm)
-
-- `ateladm node install` — dirs + systemd
-- `ateladm node join` — writes config (address + ports + credentials)
-- `install --auto-join` — install then join in one chain
+`Containers.Delete` marks the container `removed`. The agent stops the task
+(SIGTERM, SIGKILL after 10 seconds), deletes the container and snapshot,
+removes the network namespace and reports `terminated`. The API server then
+releases the overlay address.

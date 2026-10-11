@@ -1,38 +1,12 @@
-# Atellar Documentation
+# Atellar documentation
 
-## Contents
-
-| Document | Description |
-|----------|-------------|
-| [architecture.md](architecture.md) | System architecture, components, data flow |
-| [getting-started.md](getting-started.md) | First-time setup and end-to-end flow |
-| [cli.md](cli.md) | `atelctl`, `ateladm`, and `atelagent` commands |
-| [agent.md](agent.md) | Agent behavior and config |
-| [api-server.md](api-server.md) | HTTP/gRPC API, routes, infrastructure |
-| [config.md](config.md) | Environment variables and config files |
-| [peer-events.md](peer-events.md) | Node and container peer notification events |
-| [networking.md](networking.md) | Overlay IPAM, netns setup, diagnostics |
-| [code-layout.md](code-layout.md) | Folder structure and dependency rules |
-
-Project conventions for contributors and AI: `.cursor/rules/atellar.mdc`
-
-## Repository layout (summary)
-
-```
-cmd/
-  api/          Control plane API server
-  atelctl/      User/client CLI
-  ateladm/      Admin/operator CLI
-  atelagent/    Node agent daemon
-internal/
-  modules/nodes/       Node domain + use cases
-  modules/containers/  Container domain + use cases
-  controlplane/        HTTP transport + bootstrap wiring
-  grpc/                gRPC server, peer registry
-  agent/               config, grpcclient, overlay
-  cli/                 CLI application services
-  cluster/ipam/        control plane overlay IPAM
-  platform/            authn, authz, pgutil, tokenhash
-pkg/client/          Global HTTP API client
-api/proto/             Protobuf definitions
-```
+| Document | Covers |
+|----------|--------|
+| [architecture.md](architecture.md) | Components, data flow, state model |
+| [getting-started.md](getting-started.md) | Installing a cluster and running a first container |
+| [cli.md](cli.md) | The `atellar` command reference |
+| [api.md](api.md) | API methods, HTTP and gRPC mapping, watches, errors, authorization |
+| [agent.md](agent.md) | What the node agent does and how containers move through states |
+| [networking.md](networking.md) | Subnet allocation, VXLAN overlay, container network namespaces |
+| [config.md](config.md) | Server environment, agent file and CLI contexts |
+| [development.md](development.md) | Code layout, tests, release process |
