@@ -10,6 +10,7 @@ import (
 	"github.com/hasirciogluhq/atellar/pkg/apiserver/apiservertest"
 	"github.com/hasirciogluhq/atellar/pkg/client"
 	"github.com/hasirciogluhq/atellar/pkg/config/agentconfig"
+	"github.com/hasirciogluhq/atellar/pkg/pki/pkitest"
 	"github.com/hasirciogluhq/atellar/pkg/transport"
 )
 
@@ -24,7 +25,8 @@ func TestRenewIfDue(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := apiservertest.New(t)
-			srv, _ := transport.NewServer(transport.GRPC, f.Server, f.Auth)
+			certs := pkitest.New(t)
+			srv, _ := transport.NewServer(transport.GRPC, f.Server, f.Auth, transport.WithTLS(certs.Server.TLSConfig()))
 			ln, err := net.Listen("tcp", "127.0.0.1:0")
 			if err != nil {
 				t.Fatal(err)
@@ -36,13 +38,14 @@ func TestRenewIfDue(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "agent.json")
 			cfg := &agentconfig.Config{
 				ControlPlane:    client.ControlPlane{Address: "127.0.0.1", HTTPPort: 1, GRPCPort: 1},
+				CACert:          string(certs.Server.CAPEM()),
 				NodeID:          f.NodeA.ID,
 				NodeAPIKey:      f.KeyA,
 				APIKeyExpiresAt: time.Now().Add(tc.expires),
 			}
 			cfg.SetDefaults()
 			a := New(path, cfg)
-			c, err := transport.NewClient(transport.GRPC, ln.Addr().String(), a.apiKey)
+			c, err := transport.NewClient(transport.GRPC, ln.Addr().String(), a.apiKey, transport.WithTLS(certs.Client))
 			if err != nil {
 				t.Fatal(err)
 			}

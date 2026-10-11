@@ -28,17 +28,22 @@ sudo atellar server install \
   --database-url "postgresql://atellar:secret@localhost:5432/atellar?sslmode=disable"
 ```
 
-The command writes `/etc/atellar/api.env`, installs and starts the
-`atellar-server` systemd unit, and prints a generated admin token. Keep the
-token; it is stored only in that file. See [config.md](config.md) for every
-option.
+The command creates the cluster CA and the server certificate under
+`/etc/atellar/pki`, writes `/etc/atellar/api.env`, installs and starts the
+`atellar-server` systemd unit, and prints:
+
+- the **CA hash** (`sha256:...`). Clients and nodes use it to fetch the
+  cluster CA once and check that they reached the real API server.
+- a generated **admin token**. Keep it; it is stored only in `api.env`.
+
+The API server only speaks TLS. See [config.md](config.md) for every option.
 
 ## 3. Point the CLI at the cluster
 
 On the machine you operate from:
 
 ```bash
-atellar config set-cluster prod --address 10.0.0.10 --token <ADMIN_TOKEN>
+atellar config set-cluster prod --address 10.0.0.10 --ca-cert-hash <CA_HASH> --token <ADMIN_TOKEN>
 atellar config set-context prod --cluster prod
 atellar config use-context prod
 atellar nodes list
@@ -56,18 +61,21 @@ atellar join-tokens create
 ```
 
 Tokens are single use and expire after 24 hours unless you pass `--multi-use`
-or `--ttl`. On each node:
+or `--ttl`. The command prints the full join command, CA hash included. On
+each node:
 
 ```bash
 sudo atellar node install
 sudo atellar node join \
   --join-token <TOKEN> \
+  --ca-cert-hash <CA_HASH> \
   --name node-1 \
   --private-ip 10.0.0.21 \
   --control-plane-address 10.0.0.10
 ```
 
-`node join` registers the machine, receives its subnet and API key, writes
+`node join` fetches the cluster CA, refuses to continue if it does not match
+the hash, registers the machine, receives its subnet and API key, writes
 `/etc/atellar/agent.json` and starts the agent. `--private-ip` is the address
 other nodes use for VXLAN traffic.
 
@@ -96,12 +104,26 @@ atellar containers delete <ID>
 ## Running the API server in Docker
 
 The repository includes a `Dockerfile` and `docker-compose.yml` that start
-PostgreSQL and the API server with the admin token `dev-admin-token`:
+PostgreSQL and the API server with the admin token `dev-admin-token`. The
+server creates its CA in the `pki` volume on first start and logs the CA hash:
 
 ```bash
 docker compose up --build
-atellar config set-cluster local --address localhost --token dev-admin-token
+docker compose logs server | grep "cluster CA"
+atellar config set-cluster local --address localhost --ca-cert-hash <CA_HASH> --token dev-admin-token
 ```
+
+## Upgrading nodes joined before TLS
+
+Agent configurations written before the API server spoke TLS have no CA, and
+the agent refuses to start with them. Run once on each such node:
+
+```bash
+sudo atellar node trust-ca --ca-cert-hash <CA_HASH>
+```
+
+Clusters in `~/.atellar/config` need `atellar config set-cluster` again with
+`--ca-cert-hash`.
 
 ## Removing Atellar
 

@@ -49,7 +49,11 @@ func (a *Agent) apiKey() string {
 // Run starts every loop and blocks until ctx is done.
 func (a *Agent) Run(ctx context.Context) error {
 	cfg := a.cfg
-	c, err := client.New(client.Config{ControlPlane: cfg.ControlPlane, Transport: cfg.Transport, Token: a.apiKey})
+	tlsConfig, err := cfg.TLS()
+	if err != nil {
+		return err
+	}
+	c, err := client.New(client.Config{ControlPlane: cfg.ControlPlane, Transport: cfg.Transport, Token: a.apiKey, TLS: tlsConfig})
 	if err != nil {
 		return err
 	}

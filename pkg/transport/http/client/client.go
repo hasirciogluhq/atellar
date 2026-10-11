@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,9 +42,10 @@ type Client struct {
 
 var _ api.Interface = (*Client)(nil)
 
-// New returns a client for baseURL ("http://host:port"). token may be nil;
+// New returns a client for baseURL ("https://host:port"). token may be nil;
 // it is called per request so rotated keys take effect immediately.
-func New(baseURL string, token func() string) *Client {
+// tlsConfig is used for https URLs.
+func New(baseURL string, token func() string, tlsConfig *tls.Config) *Client {
 	transport := &http.Transport{
 		Proxy:               http.ProxyFromEnvironment,
 		DialContext:         (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
@@ -51,6 +53,7 @@ func New(baseURL string, token func() string) *Client {
 		MaxIdleConnsPerHost: 16,
 		IdleConnTimeout:     90 * time.Second,
 		ForceAttemptHTTP2:   true,
+		TLSClientConfig:     tlsConfig,
 	}
 	return &Client{
 		base:    strings.TrimRight(baseURL, "/") + wire.Prefix,

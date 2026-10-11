@@ -1,6 +1,7 @@
 # Local API server with PostgreSQL.
 #   docker compose up --build
-# Then: atellar config set-cluster local --address localhost --token dev-admin-token
+# Then read the CA hash from `docker compose logs server | grep "cluster CA"` and run:
+#   atellar config set-cluster local --address localhost --ca-cert-hash <CA_HASH> --token dev-admin-token
 services:
   postgres:
     image: postgres:16-alpine
@@ -28,6 +29,10 @@ services:
       ADMIN_TOKEN: dev-admin-token
       CLUSTER_OVERLAY_CIDR: 10.0.0.0/8
       NODE_SUBNET_PREFIX_LEN: "24"
+      TLS_SANS: localhost,127.0.0.1
+    volumes:
+      - pki:/etc/atellar/pki
 
 volumes:
   pgdata:
+  pki:

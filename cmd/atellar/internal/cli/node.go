@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -12,12 +13,13 @@ import (
 	v1 "github.com/hasirciogluhq/atellar/pkg/apis/core/v1"
 	"github.com/hasirciogluhq/atellar/pkg/client"
 	"github.com/hasirciogluhq/atellar/pkg/config/agentconfig"
+	"github.com/hasirciogluhq/atellar/pkg/pki"
 	"github.com/hasirciogluhq/atellar/pkg/version"
 )
 
 func (e *env) nodeCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "node", Short: "Node agent setup"}
-	cmd.AddCommand(e.nodeInstallCmd(), e.nodeJoinCmd(), e.nodeRenewKeyCmd())
+	cmd.AddCommand(e.nodeInstallCmd(), e.nodeJoinCmd(), e.nodeRenewKeyCmd(), e.nodeTrustCACmd())
 	return cmd
 }
 
@@ -37,7 +39,7 @@ func (e *env) nodeInstallCmd() *cobra.Command {
 			if err := e.host.InstallUnit(host.AgentUnit, host.AgentUnitFile(), false); err != nil {
 				return err
 			}
-			fmt.Fprintf(e.out, "node agent service installed (%s)\nnext: sudo atellar node join --join-token <TOKEN> --name <NAME> --private-ip <IP> --control-plane-address <API HOST>\n", host.AgentUnit)
+			fmt.Fprintf(e.out, "node agent service installed (%s)\nnext: sudo atellar node join --join-token <TOKEN> --ca-cert-hash <HASH> --name <NAME> --private-ip <IP> --control-plane-address <API HOST>\n", host.AgentUnit)
 			return nil
 		},
 	}
@@ -45,6 +47,7 @@ func (e *env) nodeInstallCmd() *cobra.Command {
 
 type joinOptions struct {
 	token          string
+	ca             caSource
 	controlPlane   client.ControlPlane
 	transport      string
 	name           string
@@ -67,6 +70,8 @@ func (e *env) nodeJoinCmd() *cobra.Command {
 	}
 	f := join.Flags()
 	f.StringVar(&o.token, "join-token", "", "join token from `atellar join-tokens create`")
+	f.StringVar(&o.ca.hash, "ca-cert-hash", "", "pin of the cluster CA (sha256:...), printed by `atellar join-tokens create`")
+	f.StringVar(&o.ca.file, "ca-cert", "", "cluster CA certificate file, instead of fetching it")
 	f.StringVar(&o.controlPlane.Address, "control-plane-address", "", "API server host or IP")
 	f.IntVar(&o.controlPlane.HTTPPort, "http-port", 8080, "API server HTTP port")
 	f.IntVar(&o.controlPlane.GRPCPort, "grpc-port", 9090, "API server gRPC port")
@@ -90,7 +95,15 @@ func (e *env) join(ctx context.Context, o joinOptions) error {
 			return fmt.Errorf("containerd socket %s not found; install and start containerd first", o.containerdSock)
 		}
 	}
-	c, err := client.New(client.Config{ControlPlane: o.controlPlane, Transport: o.transport})
+	caPEM, err := o.ca.resolve(ctx, o.controlPlane.Address, o.controlPlane.HTTPPort)
+	if err != nil {
+		return err
+	}
+	tlsConfig, err := pki.ClientConfig(caPEM)
+	if err != nil {
+		return err
+	}
+	c, err := client.New(client.Config{ControlPlane: o.controlPlane, Transport: o.transport, TLS: tlsConfig})
 	if err != nil {
 		return err
 	}
@@ -111,6 +124,7 @@ func (e *env) join(ctx context.Context, o joinOptions) error {
 	cfg := &agentconfig.Config{
 		ControlPlane:      o.controlPlane,
 		Transport:         o.transport,
+		CACert:            string(caPEM),
 		NodeID:            resp.Node.ID,
 		NodeName:          resp.Node.Name,
 		NodeAPIKey:        resp.NodeAPIKey,
@@ -142,7 +156,11 @@ func (e *env) nodeRenewKeyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cl, err := client.New(client.Config{ControlPlane: cfg.ControlPlane, Transport: cfg.Transport, Token: client.Static(cfg.NodeAPIKey)})
+			tlsConfig, err := cfg.TLS()
+			if err != nil {
+				return err
+			}
+			cl, err := client.New(client.Config{ControlPlane: cfg.ControlPlane, Transport: cfg.Transport, Token: client.Static(cfg.NodeAPIKey), TLS: tlsConfig})
 			if err != nil {
 				return err
 			}
@@ -163,4 +181,47 @@ func (e *env) nodeRenewKeyCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// nodeTrustCACmd stores the cluster CA in an existing agent config. Nodes
+// joined before the API server served TLS use it once to upgrade.
+func (e *env) nodeTrustCACmd() *cobra.Command {
+	var ca caSource
+	cmd := &cobra.Command{
+		Use:   "trust-ca",
+		Short: "Store the cluster CA in " + agentconfig.Path + " and restart the agent",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, _ []string) error {
+			path := e.host.Path(agentconfig.Path)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			var cfg agentconfig.Config
+			if err := json.Unmarshal(data, &cfg); err != nil {
+				return fmt.Errorf("parse %s: %w", agentconfig.Path, err)
+			}
+			caPEM, err := ca.resolve(c.Context(), cfg.ControlPlane.Address, cfg.ControlPlane.HTTPPort)
+			if err != nil {
+				return err
+			}
+			cfg.CACert = string(caPEM)
+			cfg.SetDefaults()
+			if err := cfg.Validate(); err != nil {
+				return err
+			}
+			if err := agentconfig.Save(path, &cfg); err != nil {
+				return err
+			}
+			hash, _ := pki.HashPEM(caPEM)
+			fmt.Fprintf(e.out, "cluster CA %s saved to %s\n", hash, agentconfig.Path)
+			if e.host.UnitInstalled(host.AgentUnit) {
+				return e.host.Restart(host.AgentUnit)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&ca.hash, "ca-cert-hash", "", "pin of the cluster CA (sha256:...)")
+	cmd.Flags().StringVar(&ca.file, "ca-cert", "", "cluster CA certificate file, instead of fetching it")
+	return cmd
 }

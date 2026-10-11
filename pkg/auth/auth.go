@@ -23,20 +23,14 @@ type TokenAuthenticator struct {
 	nodes      NodeLookup
 }
 
-// NewTokenAuthenticator returns an authenticator. With an empty adminToken
-// the cluster runs open: anonymous callers are treated as admin.
+// NewTokenAuthenticator returns an authenticator. An empty adminToken
+// disables admin access by token; it never makes anonymous callers admin.
 func NewTokenAuthenticator(adminToken string, nodes NodeLookup) *TokenAuthenticator {
 	return &TokenAuthenticator{adminToken: adminToken, nodes: nodes}
 }
 
-// Open reports whether admin calls are allowed without a token.
-func (a *TokenAuthenticator) Open() bool { return a.adminToken == "" }
-
 func (a *TokenAuthenticator) Authenticate(ctx context.Context, plain string) (*authn.Principal, error) {
 	if plain == "" {
-		if a.Open() {
-			return adminPrincipal(), nil
-		}
 		return nil, nil
 	}
 	if a.adminToken != "" && token.Equal(plain, a.adminToken) {

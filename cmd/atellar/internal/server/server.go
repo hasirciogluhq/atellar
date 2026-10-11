@@ -13,6 +13,7 @@ import (
 	"github.com/hasirciogluhq/atellar/pkg/auth"
 	"github.com/hasirciogluhq/atellar/pkg/config/serverconfig"
 	"github.com/hasirciogluhq/atellar/pkg/controller/nodelifecycle"
+	"github.com/hasirciogluhq/atellar/pkg/pki"
 	"github.com/hasirciogluhq/atellar/pkg/storage"
 	"github.com/hasirciogluhq/atellar/pkg/transport"
 )
@@ -34,10 +35,15 @@ func Run(ctx context.Context, cfg serverconfig.Config, store storage.Interface, 
 	if err != nil {
 		return err
 	}
-	authn := auth.NewTokenAuthenticator(cfg.AdminToken, store.GetNodeByAPIKeyHash)
-	if authn.Open() {
-		log.Printf("WARNING: %s is empty; every caller that reaches the API is cluster admin", serverconfig.EnvAdminToken)
+	if cfg.AdminToken == "" {
+		return fmt.Errorf("%s is required", serverconfig.EnvAdminToken)
 	}
+	authn := auth.NewTokenAuthenticator(cfg.AdminToken, store.GetNodeByAPIKeyHash)
+	certs, err := pki.LoadOrCreateServer(cfg.PKIDir, cfg.TLSSANs)
+	if err != nil {
+		return fmt.Errorf("pki: %w", err)
+	}
+	log.Printf("atellar server: cluster CA %s (%s)", certs.CAHash(), cfg.PKIDir)
 
 	if ls.HTTP == nil {
 		if ls.HTTP, err = net.Listen("tcp", cfg.HTTPAddr()); err != nil {
@@ -59,7 +65,7 @@ func Run(ctx context.Context, cfg serverconfig.Config, store storage.Interface, 
 		kind transport.Kind
 		ln   net.Listener
 	}{{transport.HTTP, ls.HTTP}, {transport.GRPC, ls.GRPC}} {
-		srv, err := transport.NewServer(s.kind, api, authn)
+		srv, err := transport.NewServer(s.kind, api, authn, transport.WithTLS(certs.TLSConfig()))
 		if err != nil {
 			return err
 		}

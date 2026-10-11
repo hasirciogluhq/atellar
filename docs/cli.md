@@ -17,8 +17,9 @@ atellar [--config PATH] [--context NAME] [-o table|json] <command>
 
 ### `atellar server install`
 
-Writes `/etc/atellar/api.env` (mode 0600) and installs, enables and starts
-`atellar-server.service`.
+Creates the cluster CA and server certificate in the PKI directory (kept if
+they exist), writes `/etc/atellar/api.env` (mode 0600) and installs, enables
+and starts `atellar-server.service`. Prints the CA hash and the admin token.
 
 | Flag | Default | |
 |------|---------|---|
@@ -31,7 +32,8 @@ Writes `/etc/atellar/api.env` (mode 0600) and installs, enables and starts
 | `--node-subnet-prefix` | `24` | Prefix length of each node subnet |
 | `--node-stale-after` | `30s` | Heartbeat age that marks a node `not_ready` |
 | `--admin-token` | generated | Admin token |
-| `--open` | `false` | Run without an admin token (trusted networks only) |
+| `--pki-dir` | `/etc/atellar/pki` | Cluster CA and server certificate |
+| `--tls-san` | | Extra DNS name or IP for the server certificate, repeatable |
 | `--start` | `true` | Start the service after installing |
 
 ### `atellar node install`
@@ -41,12 +43,16 @@ Installs and enables `atellar-agent.service`. The service starts once
 
 ### `atellar node join`
 
-Registers the machine with the API server, writes `/etc/atellar/agent.json`
-(mode 0600) and restarts the agent if its unit is installed.
+Fetches the cluster CA and checks it against `--ca-cert-hash` (or reads it
+from `--ca-cert`), registers the machine with the API server, writes
+`/etc/atellar/agent.json` (mode 0600) and restarts the agent if its unit is
+installed.
 
 | Flag | Default | |
 |------|---------|---|
 | `--join-token` | required | Token from `atellar join-tokens create` |
+| `--ca-cert-hash` | | Cluster CA pin (`sha256:...`); this or `--ca-cert` is required |
+| `--ca-cert` | | Cluster CA certificate file, instead of fetching it |
 | `--name` | required | Node name, unique in the cluster |
 | `--private-ip` | required | Address other nodes reach this node on; carries VXLAN traffic |
 | `--control-plane-address` | required | API server host or IP |
@@ -62,6 +68,12 @@ Registers the machine with the API server, writes `/etc/atellar/agent.json`
 Requests a new node API key, writes it to the agent configuration and restarts
 the agent. The agent also renews its key on its own seven days before expiry.
 
+### `atellar node trust-ca`
+
+Stores the cluster CA in `/etc/atellar/agent.json` and restarts the agent.
+Takes `--ca-cert-hash` or `--ca-cert` like `node join`. Nodes joined before the
+API server served TLS run it once.
+
 ### `atellar server run`, `atellar agent run`
 
 The processes systemd starts. `server run` reads its configuration from the
@@ -71,12 +83,16 @@ environment (see [config.md](config.md)), applies migrations and serves.
 ## Client configuration
 
 ```bash
-atellar config set-cluster NAME --address HOST [--http-port 8080] [--grpc-port 9090] [--transport grpc|http] [--token TOKEN]
+atellar config set-cluster NAME --address HOST (--ca-cert-hash sha256:... | --ca-cert FILE) [--http-port 8080] [--grpc-port 9090] [--transport grpc|http] [--token TOKEN]
 atellar config set-context NAME --cluster CLUSTER
 atellar config use-context NAME
 atellar config current-context
 atellar config get-contexts
 ```
+
+`set-cluster` stores the cluster CA in the configuration. With
+`--ca-cert-hash` it fetches the CA from the API server and refuses to save
+the cluster when the hash does not match.
 
 ## Operating the cluster
 

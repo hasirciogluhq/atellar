@@ -1,9 +1,10 @@
-// Package server exposes an api.Interface over HTTP/1.1 and cleartext
-// HTTP/2 with JSON bodies. Watches stream newline-delimited JSON.
+// Package server exposes an api.Interface over HTTP/1.1 and HTTP/2 with JSON
+// bodies, over TLS in production. Watches stream newline-delimited JSON.
 package server
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -24,11 +25,14 @@ import (
 type Server struct {
 	api  api.Interface
 	auth authn.Authenticator
+	tls  *tls.Config
 	mux  *http.ServeMux
 }
 
-func New(svc api.Interface, auth authn.Authenticator) *Server {
-	s := &Server{api: svc, auth: auth, mux: http.NewServeMux()}
+// New returns a server. A nil tlsConfig serves cleartext HTTP/1.1 and
+// HTTP/2, which only tests use.
+func New(svc api.Interface, auth authn.Authenticator, tlsConfig *tls.Config) *Server {
+	s := &Server{api: svc, auth: auth, tls: tlsConfig, mux: http.NewServeMux()}
 	s.routes()
 	return s
 }
@@ -88,7 +92,11 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
-	protocols.SetUnencryptedHTTP2(true)
+	if s.tls != nil {
+		protocols.SetHTTP2(true)
+	} else {
+		protocols.SetUnencryptedHTTP2(true)
+	}
 
 	srv := &http.Server{
 		Handler:           s,
@@ -96,6 +104,13 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		BaseContext:       func(net.Listener) context.Context { return ctx },
+	}
+	serve := func() error { return srv.Serve(ln) }
+	if s.tls != nil {
+		// ServeTLS adds the ALPN protocols; certificates come from the
+		// config's GetCertificate.
+		srv.TLSConfig = s.tls.Clone()
+		serve = func() error { return srv.ServeTLS(ln, "", "") }
 	}
 
 	done := make(chan struct{})
@@ -107,7 +122,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	err := srv.Serve(ln)
+	err := serve()
 	if errors.Is(err, http.ErrServerClosed) {
 		<-done
 		return nil

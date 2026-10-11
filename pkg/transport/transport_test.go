@@ -12,6 +12,7 @@ import (
 	"github.com/hasirciogluhq/atellar/pkg/api/watch"
 	v1 "github.com/hasirciogluhq/atellar/pkg/apis/core/v1"
 	"github.com/hasirciogluhq/atellar/pkg/apiserver/apiservertest"
+	"github.com/hasirciogluhq/atellar/pkg/pki/pkitest"
 	"github.com/hasirciogluhq/atellar/pkg/transport"
 	"github.com/hasirciogluhq/atellar/pkg/transport/tcp"
 )
@@ -29,7 +30,8 @@ func serve(t testing.TB, kind transport.Kind, f *apiservertest.Fixture) func(tok
 // serveFunc is serve with a token callback, as long running agents use.
 func serveFunc(t testing.TB, kind transport.Kind, f *apiservertest.Fixture) func(token func() string) transport.Client {
 	t.Helper()
-	srv, err := transport.NewServer(kind, f.Server, f.Auth)
+	certs := pkitest.New(t)
+	srv, err := transport.NewServer(kind, f.Server, f.Auth, transport.WithTLS(certs.Server.TLSConfig()))
 	if err != nil {
 		t.Fatalf("NewServer(%s): %v", kind, err)
 	}
@@ -50,10 +52,10 @@ func serveFunc(t testing.TB, kind transport.Kind, f *apiservertest.Fixture) func
 
 	address := ln.Addr().String()
 	if kind == transport.HTTP {
-		address = "http://" + address
+		address = "https://" + address
 	}
 	return func(token func() string) transport.Client {
-		c, err := transport.NewClient(kind, address, token)
+		c, err := transport.NewClient(kind, address, token, transport.WithTLS(certs.Client))
 		if err != nil {
 			t.Fatalf("NewClient(%s): %v", kind, err)
 		}
@@ -69,7 +71,7 @@ func ctxWithTimeout(t *testing.T) context.Context {
 }
 
 // TestTransportAuthorizationMatrix repeats the in-process authorization
-// matrix over the network: transport x auth mode x method x caller. A
+// matrix over the network, over TLS: transport x method x caller. A
 // transport passes when every caller gets exactly the result it gets when
 // calling the API server directly.
 func TestTransportAuthorizationMatrix(t *testing.T) {
@@ -77,26 +79,17 @@ func TestTransportAuthorizationMatrix(t *testing.T) {
 	callers = append(callers, apiservertest.BadToken)
 
 	for _, kind := range wireKinds {
-		for _, open := range []bool{false, true} {
-			mode := "closed"
-			if open {
-				mode = "open"
-			}
-			for _, tc := range apiservertest.Cases() {
-				for _, caller := range callers {
-					t.Run(string(kind)+"/"+mode+"/"+tc.Name+"/"+string(caller), func(t *testing.T) {
-						t.Parallel()
-						f := apiservertest.New(t)
-						if open {
-							f = apiservertest.NewOpen(t)
-						}
-						client := serve(t, kind, f)(f.Token(caller))
-						err := tc.Call(ctxWithTimeout(t), client, f)
-						if err := apiservertest.Check(err, tc.Expect(caller, f.Open)); err != nil {
-							t.Fatal(err)
-						}
-					})
-				}
+		for _, tc := range apiservertest.Cases() {
+			for _, caller := range callers {
+				t.Run(string(kind)+"/"+tc.Name+"/"+string(caller), func(t *testing.T) {
+					t.Parallel()
+					f := apiservertest.New(t)
+					client := serve(t, kind, f)(f.Token(caller))
+					err := tc.Call(ctxWithTimeout(t), client, f)
+					if err := apiservertest.Check(err, tc.Expect(caller)); err != nil {
+						t.Fatal(err)
+					}
+				})
 			}
 		}
 	}
@@ -327,5 +320,40 @@ func TestTCPNotImplemented(t *testing.T) {
 	}
 	if _, err := transport.NewClient("smoke", "x", nil); err == nil {
 		t.Error("NewClient(unknown) succeeded")
+	}
+}
+
+// TestTransportRequiresTLS checks that a TLS server does not answer a
+// cleartext client on either transport.
+func TestTransportRequiresTLS(t *testing.T) {
+	for _, kind := range wireKinds {
+		t.Run(string(kind), func(t *testing.T) {
+			f := apiservertest.New(t)
+			certs := pkitest.New(t)
+			srv, err := transport.NewServer(kind, f.Server, f.Auth, transport.WithTLS(certs.Server.TLSConfig()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() { _ = srv.Serve(ctx, ln) }()
+
+			address := ln.Addr().String()
+			if kind == transport.HTTP {
+				address = "http://" + address
+			}
+			c, err := transport.NewClient(kind, address, func() string { return apiservertest.AdminToken })
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.Close()
+			if _, err := c.Nodes().List(ctxWithTimeout(t)); err == nil {
+				t.Fatal("cleartext client got an answer from a TLS server")
+			}
+		})
 	}
 }

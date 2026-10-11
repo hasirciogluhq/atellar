@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/hasirciogluhq/atellar/pkg/client"
+	"github.com/hasirciogluhq/atellar/pkg/pki/pkitest"
 )
 
-func valid() *Config {
+func valid(t *testing.T) *Config {
 	return &Config{
 		ControlPlane:    client.ControlPlane{Address: "10.0.0.1", HTTPPort: 8080, GRPCPort: 9090},
+		CACert:          string(pkitest.New(t).Server.CAPEM()),
 		NodeID:          "node_1",
 		NodeAPIKey:      "key",
 		APIKeyExpiresAt: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -22,7 +24,7 @@ func valid() *Config {
 
 func TestSaveLoadRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "etc", "agent.json")
-	if err := Save(path, valid()); err != nil {
+	if err := Save(path, valid(t)); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(path)
@@ -43,6 +45,13 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	if cfg.Network.MTU != 1400 || time.Duration(cfg.Network.ReconcileInterval) != time.Minute {
 		t.Fatalf("network lost: %+v", cfg.Network)
 	}
+	if _, err := cfg.TLS(); err != nil {
+		t.Fatalf("TLS: %v", err)
+	}
+	cfg.CACert = "not a certificate"
+	if _, err := cfg.TLS(); err == nil {
+		t.Fatal("TLS accepted a broken CA")
+	}
 }
 
 func TestValidate(t *testing.T) {
@@ -52,9 +61,10 @@ func TestValidate(t *testing.T) {
 		"no expiry":     func(c *Config) { c.APIKeyExpiresAt = time.Time{} },
 		"no address":    func(c *Config) { c.ControlPlane.Address = "" },
 		"bad transport": func(c *Config) { c.Transport = "carrier-pigeon" },
+		"no ca cert":    func(c *Config) { c.CACert = "" },
 	}
 	for name, mutate := range cases {
-		cfg := valid()
+		cfg := valid(t)
 		cfg.SetDefaults()
 		mutate(cfg)
 		if cfg.Validate() == nil {

@@ -5,6 +5,7 @@ package transport
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 
@@ -40,6 +41,25 @@ func ParseKind(s string) (Kind, error) {
 	return "", fmt.Errorf("unknown transport %q (want http, grpc or tcp)", s)
 }
 
+// Option configures a client or server.
+type Option func(*options)
+
+type options struct {
+	tls *tls.Config
+}
+
+// WithTLS secures the connection. Production always sets it; without it
+// clients and servers speak cleartext, which only tests use.
+func WithTLS(cfg *tls.Config) Option { return func(o *options) { o.tls = cfg } }
+
+func apply(opts []Option) options {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
+
 // Client is an api.Interface bound to a connection.
 type Client interface {
 	api.Interface
@@ -47,14 +67,15 @@ type Client interface {
 }
 
 // NewClient connects to address. For HTTP, address is a base URL
-// ("http://host:port"); for gRPC and TCP it is "host:port". token is called
+// ("https://host:port"); for gRPC and TCP it is "host:port". token is called
 // per request and may be nil.
-func NewClient(kind Kind, address string, token func() string) (Client, error) {
+func NewClient(kind Kind, address string, token func() string, opts ...Option) (Client, error) {
+	o := apply(opts)
 	switch kind {
 	case HTTP:
-		return httpclient.New(address, token), nil
+		return httpclient.New(address, token, o.tls), nil
 	case GRPC:
-		return grpcclient.New(address, token)
+		return grpcclient.New(address, token, o.tls)
 	case TCP:
 		_, err := tcp.NewClient(address, token)
 		return nil, err
@@ -68,12 +89,13 @@ type Server interface {
 	Serve(ctx context.Context, ln net.Listener) error
 }
 
-func NewServer(kind Kind, svc api.Interface, auth authn.Authenticator) (Server, error) {
+func NewServer(kind Kind, svc api.Interface, auth authn.Authenticator, opts ...Option) (Server, error) {
+	o := apply(opts)
 	switch kind {
 	case HTTP:
-		return httpserver.New(svc, auth), nil
+		return httpserver.New(svc, auth, o.tls), nil
 	case GRPC:
-		return grpcserver.New(svc, auth), nil
+		return grpcserver.New(svc, auth, o.tls), nil
 	case TCP:
 		return tcp.NewServer(svc, auth)
 	}

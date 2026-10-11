@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hasirciogluhq/atellar/pkg/pki"
 )
 
 const (
@@ -29,6 +31,8 @@ const (
 	EnvNodeSubnetPrefixLen = "NODE_SUBNET_PREFIX_LEN"
 	EnvAdminToken          = "ADMIN_TOKEN"
 	EnvNodeStaleAfter      = "NODE_STALE_AFTER"
+	EnvPKIDir              = "PKI_DIR"
+	EnvTLSSANs             = "TLS_SANS"
 )
 
 type Config struct {
@@ -40,11 +44,16 @@ type Config struct {
 	GRPCPort            int
 	ClusterCIDR         string
 	NodeSubnetPrefixLen int
-	// AdminToken guards every operator call. Empty runs the cluster open:
-	// anyone who reaches the ports is admin. Only use that on a trusted
-	// network.
+	// AdminToken guards every operator call. It is required.
 	AdminToken     string
 	NodeStaleAfter time.Duration
+	// PKIDir holds the cluster CA and the server certificate; missing files
+	// are created at start (see pkg/pki).
+	PKIDir string
+	// TLSSANs are extra DNS names or IPs for the server certificate, for
+	// clients such as curl that do not verify the fixed name
+	// atellar-apiserver.
+	TLSSANs []string
 }
 
 // Default returns the configuration with every optional field set.
@@ -56,6 +65,7 @@ func Default() Config {
 		ClusterCIDR:         "10.0.0.0/8",
 		NodeSubnetPrefixLen: 24,
 		NodeStaleAfter:      30 * time.Second,
+		PKIDir:              pki.DefaultDir,
 	}
 }
 
@@ -87,6 +97,10 @@ func FromEnv(lookup func(string) (string, bool)) (Config, error) {
 	str(EnvClusterCIDR, &cfg.ClusterCIDR)
 	integer(EnvNodeSubnetPrefixLen, &cfg.NodeSubnetPrefixLen)
 	str(EnvAdminToken, &cfg.AdminToken)
+	str(EnvPKIDir, &cfg.PKIDir)
+	if v, ok := lookup(EnvTLSSANs); ok {
+		cfg.TLSSANs = splitList(v)
+	}
 	if v, ok := lookup(EnvNodeStaleAfter); ok && strings.TrimSpace(v) != "" {
 		d, err := time.ParseDuration(strings.TrimSpace(v))
 		if err != nil {
@@ -126,6 +140,12 @@ func (c Config) Validate() error {
 	} else if ones, _ := cidr.Mask.Size(); c.NodeSubnetPrefixLen < ones || c.NodeSubnetPrefixLen > 30 {
 		errs = append(errs, fmt.Errorf("%s must be between %d and 30", EnvNodeSubnetPrefixLen, ones))
 	}
+	if c.AdminToken == "" {
+		errs = append(errs, fmt.Errorf("%s is required", EnvAdminToken))
+	}
+	if c.PKIDir == "" {
+		errs = append(errs, fmt.Errorf("%s is required", EnvPKIDir))
+	}
 	if c.NodeStaleAfter <= 0 {
 		errs = append(errs, fmt.Errorf("%s must be positive", EnvNodeStaleAfter))
 	}
@@ -150,8 +170,20 @@ func (c Config) Env() string {
 		EnvNodeSubnetPrefixLen + "=" + strconv.Itoa(c.NodeSubnetPrefixLen),
 		EnvAdminToken + "=" + c.AdminToken,
 		EnvNodeStaleAfter + "=" + c.NodeStaleAfter.String(),
+		EnvPKIDir + "=" + c.PKIDir,
+		EnvTLSSANs + "=" + strings.Join(c.TLSSANs, ","),
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+func splitList(s string) []string {
+	var out []string
+	for _, item := range strings.Split(s, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 // ParseEnv reads an environment file written by Env.

@@ -7,17 +7,26 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/hasirciogluhq/atellar/pkg/config/ctlconfig"
+	"github.com/hasirciogluhq/atellar/pkg/pki"
 )
 
 func (e *env) configCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "config", Short: "Manage clusters and contexts"}
 
-	var cluster ctlconfig.Cluster
+	var (
+		cluster ctlconfig.Cluster
+		ca      caSource
+	)
 	setCluster := &cobra.Command{
 		Use:   "set-cluster NAME",
 		Short: "Add or replace a cluster",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(c *cobra.Command, args []string) error {
+			caPEM, err := ca.resolve(c.Context(), cluster.Address, cluster.HTTPPort)
+			if err != nil {
+				return err
+			}
+			cluster.CACert = string(caPEM)
 			return e.updateConfig(func(cfg *ctlconfig.Config) error { return cfg.SetCluster(args[0], cluster) },
 				"cluster %q set", args[0])
 		},
@@ -27,7 +36,9 @@ func (e *env) configCmd() *cobra.Command {
 	f.IntVar(&cluster.HTTPPort, "http-port", 8080, "API server HTTP port")
 	f.IntVar(&cluster.GRPCPort, "grpc-port", 9090, "API server gRPC port")
 	f.StringVar(&cluster.Transport, "transport", "grpc", "transport: grpc or http")
-	f.StringVar(&cluster.Token, "token", "", "admin token (empty for an open cluster)")
+	f.StringVar(&cluster.Token, "token", "", "API token")
+	f.StringVar(&ca.hash, "ca-cert-hash", "", "pin of the cluster CA (sha256:...), printed by `atellar server install`; the CA is fetched and checked against it")
+	f.StringVar(&ca.file, "ca-cert", "", "cluster CA certificate file (the server's "+pki.DefaultDir+"/"+pki.CACertFile+")")
 	_ = setCluster.MarkFlagRequired("address")
 
 	var contextCluster string

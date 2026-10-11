@@ -36,6 +36,19 @@ The gRPC service is `atellar.v1.Atellar`. Messages are the same JSON documents
 as the HTTP bodies, sent with the `json` content subtype
 (`application/grpc+json`), so no generated code is needed on either side.
 
+## Transport security
+
+Both ports serve TLS only, with the same certificate. The certificate is
+issued by the cluster CA (see [config.md](config.md)) for the fixed name
+`atellar-apiserver`, plus any `TLS_SANS`, so clients verify it no matter which
+address they dial. The served chain includes the CA certificate, which lets a
+client that only knows the CA hash fetch the CA and check it.
+
+```bash
+curl --cacert /etc/atellar/pki/ca.crt --resolve atellar-apiserver:8080:10.0.0.10 \
+  -H "Authorization: Bearer $TOKEN" https://atellar-apiserver:8080/api/v1/nodes
+```
+
 ## Authentication
 
 Every call carries `Authorization: Bearer <token>` (HTTP header or gRPC
@@ -46,8 +59,8 @@ metadata). Two kinds of token exist:
   the agent seven days before expiry. Only the SHA-256 hash is stored. Keys of
   evicted nodes are rejected.
 
-When the server has no admin token (open mode), calls without a token are
-treated as admin. Node keys keep working and keep their restrictions.
+The API server does not start without an admin token. A call without a token
+is anonymous and may only use `Nodes.Register` and `/healthz`.
 
 A missing or wrong token is `Unauthorized`. A valid token without access to the
 method or object is `Forbidden`. The full caller by method matrix is enforced

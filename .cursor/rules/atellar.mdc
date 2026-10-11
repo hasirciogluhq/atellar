@@ -40,7 +40,7 @@ There is one binary, `atellar`. Do not add other binaries.
 
 ```
 atellar server install|run
-atellar node install|join|renew-key
+atellar node install|join|renew-key|trust-ca
 atellar agent run
 atellar config set-cluster|set-context|use-context|current-context|get-contexts
 atellar nodes list|get|evict|overlay-ips|watch
@@ -63,6 +63,7 @@ atellar version
 | `/usr/local/bin/atellar` | binary |
 | `/etc/atellar/api.env` | API server environment |
 | `/usr/share/atellar/migrations` | SQL migrations |
+| `/etc/atellar/pki` | cluster CA and API server certificate |
 | `/etc/atellar/agent.json` | agent configuration |
 | `/var/log/atellar` | container logs |
 | `~/.atellar/config` | CLI contexts |

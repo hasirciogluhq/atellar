@@ -41,11 +41,11 @@ Set up the control plane and nodes (as root):
 
   atellar server install --database-url postgres://...
   atellar node install
-  atellar node join --join-token <TOKEN> --name node-1 --private-ip 10.0.0.21 --control-plane-address 10.0.0.10
+  atellar node join --join-token <TOKEN> --ca-cert-hash <CA HASH> --name node-1 --private-ip 10.0.0.21 --control-plane-address 10.0.0.10
 
 Point the CLI at the cluster once:
 
-  atellar config set-cluster prod --address 10.0.0.10 --token <admin token>
+  atellar config set-cluster prod --address 10.0.0.10 --ca-cert-hash <CA HASH> --token <admin token>
   atellar config set-context prod --cluster prod
   atellar config use-context prod
 

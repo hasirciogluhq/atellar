@@ -15,6 +15,7 @@ import (
 	"github.com/hasirciogluhq/atellar/cmd/atellar/internal/server"
 	"github.com/hasirciogluhq/atellar/pkg/auth/token"
 	"github.com/hasirciogluhq/atellar/pkg/config/serverconfig"
+	"github.com/hasirciogluhq/atellar/pkg/pki"
 	"github.com/hasirciogluhq/atellar/pkg/storage/postgres"
 	"github.com/hasirciogluhq/atellar/pkg/version"
 )
@@ -23,20 +24,14 @@ func (e *env) serverCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "server", Short: "API server setup"}
 
 	cfg := serverconfig.Default()
-	var (
-		open  bool
-		start bool
-	)
+	var start bool
 	install := &cobra.Command{
 		Use:   "install",
 		Short: "Write " + serverconfig.EnvPath + " and install the " + host.APIUnit + " service",
 		Args:  cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
 			generated := false
-			switch {
-			case open && cfg.AdminToken != "":
-				return fmt.Errorf("--open and --admin-token are mutually exclusive")
-			case !open && cfg.AdminToken == "":
+			if cfg.AdminToken == "" {
 				tok, err := token.Generate()
 				if err != nil {
 					return err
@@ -52,6 +47,11 @@ func (e *env) serverCmd() *cobra.Command {
 			if err := e.host.RequireFile(cfg.MigrationsPath, "install the release first or pass --migrations-path"); err != nil {
 				return err
 			}
+			// Create the CA now so its pin can be printed; `server run` reuses it.
+			certs, err := pki.LoadOrCreateServer(e.host.Path(cfg.PKIDir), cfg.TLSSANs)
+			if err != nil {
+				return fmt.Errorf("pki: %w", err)
+			}
 			if err := e.host.WriteFile(serverconfig.EnvPath, []byte(cfg.Env()), 0o600); err != nil {
 				return err
 			}
@@ -59,16 +59,13 @@ func (e *env) serverCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(e.out, "API server installed\n  config: %s\n  unit:   %s\n", serverconfig.EnvPath, host.APIUnit)
-			if open {
-				fmt.Fprintf(e.out, "\nWARNING: no admin token. Anyone who can reach ports %d and %d is cluster admin.\n", cfg.HTTPPort, cfg.GRPCPort)
-				return nil
-			}
+			fmt.Fprintf(e.out, "API server installed\n  config: %s\n  unit:   %s\n  pki:    %s\n  CA:     %s\n",
+				serverconfig.EnvPath, host.APIUnit, cfg.PKIDir, certs.CAHash())
 			if generated {
 				fmt.Fprintf(e.out, "\nAdmin token (stored only in %s):\n  %s\n", serverconfig.EnvPath, cfg.AdminToken)
 			}
-			fmt.Fprintf(e.out, "\nPoint the CLI at it:\n  atellar config set-cluster default --address <THIS HOST> --http-port %d --grpc-port %d --token <ADMIN TOKEN>\n  atellar config set-context default --cluster default\n  atellar config use-context default\n",
-				cfg.HTTPPort, cfg.GRPCPort)
+			fmt.Fprintf(e.out, "\nPoint the CLI at it:\n  atellar config set-cluster default --address <THIS HOST> --http-port %d --grpc-port %d --ca-cert-hash %s --token <ADMIN TOKEN>\n  atellar config set-context default --cluster default\n  atellar config use-context default\n",
+				cfg.HTTPPort, cfg.GRPCPort, certs.CAHash())
 			return nil
 		},
 	}
@@ -82,7 +79,8 @@ func (e *env) serverCmd() *cobra.Command {
 	f.IntVar(&cfg.NodeSubnetPrefixLen, "node-subnet-prefix", cfg.NodeSubnetPrefixLen, "prefix length of each node subnet")
 	f.DurationVar(&cfg.NodeStaleAfter, "node-stale-after", cfg.NodeStaleAfter, "mark a node not_ready after this long without a heartbeat")
 	f.StringVar(&cfg.AdminToken, "admin-token", "", "admin token; generated when empty")
-	f.BoolVar(&open, "open", false, "run without an admin token (trusted networks only)")
+	f.StringVar(&cfg.PKIDir, "pki-dir", cfg.PKIDir, "directory for the cluster CA and the server certificate")
+	f.StringSliceVar(&cfg.TLSSANs, "tls-san", nil, "extra DNS name or IP for the server certificate (repeatable)")
 	f.BoolVar(&start, "start", true, "start the service after installing")
 	_ = install.MarkFlagRequired("database-url")
 

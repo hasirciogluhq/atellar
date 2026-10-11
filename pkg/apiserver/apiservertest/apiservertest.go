@@ -46,8 +46,6 @@ type Fixture struct {
 	Store  *memory.Store
 	Server *apiserver.Server
 	Auth   *auth.TokenAuthenticator
-	// Open is true when the fixture has no admin token.
-	Open bool
 
 	NodeA, NodeB *v1.Node
 	KeyA, KeyB   string
@@ -56,14 +54,8 @@ type Fixture struct {
 	JoinToken string
 }
 
-// New builds a closed fixture (admin token required).
-func New(t testing.TB) *Fixture { return build(t, AdminToken) }
-
-// NewOpen builds a fixture without an admin token: anonymous callers are
-// treated as admin.
-func NewOpen(t testing.TB) *Fixture { return build(t, "") }
-
-func build(t testing.TB, adminToken string) *Fixture {
+// New builds a fixture whose admin presents AdminToken.
+func New(t testing.TB) *Fixture {
 	t.Helper()
 	ctx := context.Background()
 	store := memory.New()
@@ -74,8 +66,7 @@ func build(t testing.TB, adminToken string) *Fixture {
 	f := &Fixture{
 		Store:  store,
 		Server: srv,
-		Auth:   auth.NewTokenAuthenticator(adminToken, store.GetNodeByAPIKeyHash),
-		Open:   adminToken == "",
+		Auth:   auth.NewTokenAuthenticator(AdminToken, store.GetNodeByAPIKeyHash),
 	}
 
 	admin := f.Context(t, Admin)
@@ -125,9 +116,6 @@ func (f *Fixture) NewJoinToken(t testing.TB) string {
 func (f *Fixture) Token(c Caller) string {
 	switch c {
 	case Admin:
-		if f.Open {
-			return ""
-		}
 		return AdminToken
 	case NodeSelf:
 		return f.KeyA
@@ -163,12 +151,9 @@ type Case struct {
 }
 
 // Expect returns the reason a caller must get ("" for success).
-func (c Case) Expect(caller Caller, open bool) api.Reason {
-	switch {
-	case caller == BadToken:
+func (c Case) Expect(caller Caller) api.Reason {
+	if caller == BadToken {
 		return api.ReasonUnauthorized
-	case caller == Anonymous && open:
-		caller = Admin
 	}
 	return c.Deny[caller]
 }
