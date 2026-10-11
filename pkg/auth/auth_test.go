@@ -11,7 +11,8 @@ import (
 	"github.com/hasirciogluhq/atellar/pkg/storage"
 )
 
-// TestAuthenticate covers mode (open or closed) x presented credential.
+// TestAuthenticate covers admin token (set or empty) x presented credential.
+// An empty admin token must never turn anonymous callers into admins.
 func TestAuthenticate(t *testing.T) {
 	nodes := map[string]v1.Node{
 		token.Hash("ready-key"):   {ID: "node_ready", Name: "ready", Status: v1.NodeStatusReady},
@@ -36,7 +37,7 @@ func TestAuthenticate(t *testing.T) {
 		token        string
 		closed, open want
 	}{
-		{"", want{}, want{subject: authn.SubjectAdmin}},
+		{"", want{}, want{}},
 		{"admin-secret", want{subject: authn.SubjectAdmin}, want{err: true}},
 		{"ready-key", want{subject: authn.SubjectNode}, want{subject: authn.SubjectNode}},
 		{"evicted-key", want{err: true}, want{err: true}},
@@ -48,7 +49,7 @@ func TestAuthenticate(t *testing.T) {
 			name  string
 			admin string
 			want  want
-		}{{"closed", "admin-secret", tc.closed}, {"open", "", tc.open}} {
+		}{{"admin token", "admin-secret", tc.closed}, {"no admin token", "", tc.open}} {
 			a := NewTokenAuthenticator(mode.admin, lookup)
 			p, err := a.Authenticate(context.Background(), tc.token)
 			if (err != nil) != mode.want.err {

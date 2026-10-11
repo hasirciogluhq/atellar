@@ -4,6 +4,7 @@
 package agentconfig
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hasirciogluhq/atellar/pkg/client"
+	"github.com/hasirciogluhq/atellar/pkg/pki"
 	"github.com/hasirciogluhq/atellar/pkg/transport"
 )
 
@@ -28,6 +30,9 @@ type Config struct {
 	ControlPlane client.ControlPlane `json:"control_plane"`
 	// Transport is "grpc" (default) or "http".
 	Transport string `json:"transport,omitempty"`
+	// CACert is the cluster CA (PEM) the agent verifies the API server
+	// with. `node join` fetches it and checks it against --ca-cert-hash.
+	CACert string `json:"ca_cert"`
 
 	NodeID          string    `json:"node_id"`
 	NodeName        string    `json:"node_name,omitempty"`
@@ -100,6 +105,8 @@ func (c *Config) Validate() error {
 		return err
 	}
 	switch {
+	case c.CACert == "":
+		return errors.New("ca_cert is missing; run `atellar node trust-ca --ca-cert-hash sha256:...`")
 	case c.NodeID == "":
 		return errors.New("node_id is required")
 	case c.NodeAPIKey == "":
@@ -108,6 +115,15 @@ func (c *Config) Validate() error {
 		return errors.New("api_key_expires_at is required")
 	}
 	return nil
+}
+
+// TLS returns the client TLS configuration that trusts the cluster CA.
+func (c *Config) TLS() (*tls.Config, error) {
+	cfg, err := pki.ClientConfig([]byte(c.CACert))
+	if err != nil {
+		return nil, fmt.Errorf("ca_cert: %w", err)
+	}
+	return cfg, nil
 }
 
 // Load reads, defaults and validates a config file.

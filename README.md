@@ -25,6 +25,8 @@ each node, no custom resource definitions and no plugin system.
   gRPC serve the same methods with the same authorization.
 - **Auth**: an admin token for operators and per-node API keys for agents,
   hashed at rest, rotated automatically.
+- **TLS everywhere**: the API server only speaks TLS with a certificate from
+  the cluster CA; nodes and the CLI pin the CA by hash when they first connect.
 
 ## Quick start
 
@@ -32,18 +34,18 @@ each node, no custom resource definitions and no plugin system.
 # Every machine
 curl -fsSL https://github.com/hasirciogluhq/atellar/releases/latest/download/install.sh | sudo bash
 
-# API server (prints the admin token)
+# API server (prints the CA hash and the admin token)
 sudo atellar server install --database-url "postgresql://atellar:secret@localhost:5432/atellar?sslmode=disable"
 
 # Operator machine
-atellar config set-cluster prod --address 10.0.0.10 --token <ADMIN_TOKEN>
+atellar config set-cluster prod --address 10.0.0.10 --ca-cert-hash <CA_HASH> --token <ADMIN_TOKEN>
 atellar config set-context prod --cluster prod
 atellar config use-context prod
 atellar join-tokens create
 
 # Every node (containerd must be running)
 sudo atellar node install
-sudo atellar node join --join-token <TOKEN> --name node-1 --private-ip 10.0.0.21 --control-plane-address 10.0.0.10
+sudo atellar node join --join-token <TOKEN> --ca-cert-hash <CA_HASH> --name node-1 --private-ip 10.0.0.21 --control-plane-address 10.0.0.10
 
 # Run something
 atellar containers create --image docker.io/library/nginx:1.27 --cpu 0.5 --memory 256
@@ -57,7 +59,7 @@ The full walkthrough is in [docs/getting-started.md](docs/getting-started.md).
 | Command | Purpose |
 |---------|---------|
 | `atellar server install`, `atellar server run` | Install and run the API server |
-| `atellar node install`, `node join`, `node renew-key` | Install and register a node agent |
+| `atellar node install`, `node join`, `node renew-key`, `node trust-ca` | Install and register a node agent |
 | `atellar agent run` | The node agent process |
 | `atellar config ...` | Clusters and contexts for the CLI |
 | `atellar nodes ...` | List, inspect, watch and evict nodes |
@@ -111,7 +113,7 @@ ok  	github.com/hasirciogluhq/atellar/pkg/transport/http/wire
 | Tests passed (including table subtests) | 907 |
 | Tests failed or skipped | 0 |
 | Statement coverage, all packages (`-coverpkg=./...`) | 76.3% |
-| Authorization matrix | 21 cases covering all 19 API methods, x 5 callers (anonymous, admin, owning node, other node, bad token), x closed and open mode, x HTTP and gRPC |
+| Authorization matrix | 21 cases covering all 19 API methods, x 5 callers (anonymous, admin, owning node, other node, bad token), x HTTP and gRPC |
 
 Coverage is lowest where code needs root, containerd or kernel devices
 (`pkg/runtime/containerd`, `pkg/network/netns`, the iproute2 dataplane); those

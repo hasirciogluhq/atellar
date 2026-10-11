@@ -1,6 +1,7 @@
 package serverconfig
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -11,18 +12,19 @@ func lookup(env map[string]string) func(string) (string, bool) {
 }
 
 func TestFromEnvDefaults(t *testing.T) {
-	cfg, err := FromEnv(lookup(map[string]string{EnvDatabaseURL: "postgres://x"}))
+	cfg, err := FromEnv(lookup(map[string]string{EnvDatabaseURL: "postgres://x", EnvAdminToken: "secret"}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.HTTPAddr() != ":8080" || cfg.GRPCAddr() != ":9090" || cfg.ClusterCIDR != "10.0.0.0/8" ||
-		cfg.NodeSubnetPrefixLen != 24 || cfg.NodeStaleAfter != 30*time.Second || cfg.AdminToken != "" {
+		cfg.NodeSubnetPrefixLen != 24 || cfg.NodeStaleAfter != 30*time.Second || cfg.PKIDir != "/etc/atellar/pki" ||
+		len(cfg.TLSSANs) != 0 {
 		t.Fatalf("defaults: %+v", cfg)
 	}
 }
 
 func TestFromEnvErrors(t *testing.T) {
-	base := map[string]string{EnvDatabaseURL: "postgres://x"}
+	base := map[string]string{EnvDatabaseURL: "postgres://x", EnvAdminToken: "secret"}
 	cases := map[string]map[string]string{
 		"no database":      {},
 		"bad port":         {EnvHTTPPort: "eighty"},
@@ -35,6 +37,8 @@ func TestFromEnvErrors(t *testing.T) {
 		"bad stale after":  {EnvNodeStaleAfter: "later"},
 		"zero stale after": {EnvNodeStaleAfter: "0s"},
 		"empty migrations": {EnvMigrationsPath: ""},
+		"no admin token":   {EnvAdminToken: ""},
+		"empty pki dir":    {EnvPKIDir: ""},
 	}
 	for name, overrides := range cases {
 		env := map[string]string{}
@@ -58,6 +62,7 @@ func TestEnvRoundTrip(t *testing.T) {
 	in.AdminToken = "secret"
 	in.BindAddress = "10.0.0.5"
 	in.NodeStaleAfter = time.Minute
+	in.TLSSANs = []string{"api.example.com", "10.0.0.5"}
 	rendered := in.Env()
 	if strings.Contains(rendered, "\u2014") {
 		t.Fatal("env file contains an em dash")
@@ -66,7 +71,7 @@ func TestEnvRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out != in {
+	if !reflect.DeepEqual(out, in) {
 		t.Fatalf("round trip:\n in %+v\nout %+v", in, out)
 	}
 }

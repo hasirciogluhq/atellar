@@ -5,11 +5,13 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -35,10 +37,15 @@ type Client struct {
 var _ api.Interface = (*Client)(nil)
 
 // New dials target ("host:port") lazily. token may be nil; it is called per
-// call so rotated keys take effect immediately.
-func New(target string, token func() string) (*Client, error) {
+// call so rotated keys take effect immediately. A nil tlsConfig dials
+// cleartext, which only tests use.
+func New(target string, token func() string, tlsConfig *tls.Config) (*Client, error) {
+	creds := insecure.NewCredentials()
+	if tlsConfig != nil {
+		creds = credentials.NewTLS(tlsConfig)
+	}
 	conn, err := grpc.NewClient(target,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(creds),
 		grpc.WithDefaultCallOptions(grpc.CallContentSubtype(wire.CodecName)),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: 30 * time.Second, Timeout: 10 * time.Second, PermitWithoutStream: true}),
 	)

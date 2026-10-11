@@ -3,6 +3,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -32,7 +33,7 @@ func (cp ControlPlane) Validate() error {
 }
 
 func (cp ControlPlane) HTTPBaseURL() string {
-	return "http://" + net.JoinHostPort(cp.Address, strconv.Itoa(cp.HTTPPort))
+	return "https://" + net.JoinHostPort(cp.Address, strconv.Itoa(cp.HTTPPort))
 }
 
 func (cp ControlPlane) GRPCAddr() string {
@@ -56,6 +57,9 @@ type Config struct {
 	Transport string
 	// Token returns the bearer token for each request; nil sends none.
 	Token func() string
+	// TLS verifies the API server, usually pki.ClientConfig with the
+	// cluster CA. The API server only speaks TLS, so it is required.
+	TLS *tls.Config
 }
 
 // New returns a connected api.Interface.
@@ -67,11 +71,14 @@ func New(cfg Config) (transport.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	if cfg.TLS == nil {
+		return nil, errors.New("no cluster CA configured")
+	}
 	endpoint, err := cfg.ControlPlane.Endpoint(kind)
 	if err != nil {
 		return nil, err
 	}
-	return transport.NewClient(kind, endpoint, cfg.Token)
+	return transport.NewClient(kind, endpoint, cfg.Token, transport.WithTLS(cfg.TLS))
 }
 
 // Static returns a token function for a fixed token.

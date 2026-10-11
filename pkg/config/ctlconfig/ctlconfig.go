@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/hasirciogluhq/atellar/pkg/client"
+	"github.com/hasirciogluhq/atellar/pkg/pki"
 	"github.com/hasirciogluhq/atellar/pkg/transport"
 )
 
@@ -19,21 +20,35 @@ type Cluster struct {
 	client.ControlPlane
 	// Transport is "grpc" (default) or "http".
 	Transport string `json:"transport,omitempty"`
-	// Token is the admin token; empty for an open cluster.
+	// Token is the API token the CLI presents.
 	Token string `json:"token,omitempty"`
+	// CACert is the cluster CA (PEM) the CLI verifies the API server with.
+	CACert string `json:"ca_cert,omitempty"`
 }
 
 func (c Cluster) Validate() error {
 	if err := c.ControlPlane.Validate(); err != nil {
 		return err
 	}
-	_, err := transport.ParseKind(c.Transport)
-	return err
+	if _, err := transport.ParseKind(c.Transport); err != nil {
+		return err
+	}
+	if c.CACert == "" {
+		return errors.New("cluster has no CA; run `atellar config set-cluster` with --ca-cert-hash or --ca-cert")
+	}
+	if _, err := pki.ClientConfig([]byte(c.CACert)); err != nil {
+		return fmt.Errorf("ca_cert: %w", err)
+	}
+	return nil
 }
 
 // Client connects to the cluster.
 func (c Cluster) Client() (transport.Client, error) {
-	return client.New(client.Config{ControlPlane: c.ControlPlane, Transport: c.Transport, Token: client.Static(c.Token)})
+	tlsConfig, err := pki.ClientConfig([]byte(c.CACert))
+	if err != nil {
+		return nil, fmt.Errorf("ca_cert: %w", err)
+	}
+	return client.New(client.Config{ControlPlane: c.ControlPlane, Transport: c.Transport, Token: client.Static(c.Token), TLS: tlsConfig})
 }
 
 type Context struct {

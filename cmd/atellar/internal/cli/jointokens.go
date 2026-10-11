@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	v1 "github.com/hasirciogluhq/atellar/pkg/apis/core/v1"
+	"github.com/hasirciogluhq/atellar/pkg/pki"
 )
 
 func tokenRow(t v1.JoinToken) []string {
@@ -65,7 +66,11 @@ func (e *env) joinTokensCmd() *cobra.Command {
 				single := false
 				req.SingleUse = &single
 			}
-			cl, err := e.connect()
+			cluster, err := e.cluster()
+			if err != nil {
+				return err
+			}
+			cl, err := cluster.Client()
 			if err != nil {
 				return err
 			}
@@ -77,7 +82,12 @@ func (e *env) joinTokensCmd() *cobra.Command {
 			if e.output == "json" {
 				return e.print(t, nil, nil)
 			}
-			fmt.Fprintf(e.out, "token: %s\n\nJoin a node with:\n  sudo atellar node join --join-token %s --name <NAME> --private-ip <IP> --control-plane-address <API HOST>\n", t.Token, t.Token)
+			hash, err := pki.HashPEM([]byte(cluster.CACert))
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(e.out, "token: %s\n\nJoin a node with:\n  sudo atellar node join --join-token %s --ca-cert-hash %s --name <NAME> --private-ip <IP> --control-plane-address %s\n",
+				t.Token, t.Token, hash, cluster.Address)
 			return nil
 		},
 	}

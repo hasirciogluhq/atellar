@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
@@ -14,6 +15,8 @@ import (
 	"github.com/hasirciogluhq/atellar/pkg/apiserver/apiservertest"
 	"github.com/hasirciogluhq/atellar/pkg/config/agentconfig"
 	"github.com/hasirciogluhq/atellar/pkg/config/serverconfig"
+	"github.com/hasirciogluhq/atellar/pkg/pki"
+	"github.com/hasirciogluhq/atellar/pkg/pki/pkitest"
 	"github.com/hasirciogluhq/atellar/pkg/transport"
 )
 
@@ -64,8 +67,7 @@ func TestServerInstall(t *testing.T) {
 	}{
 		{"generated token", nil, func(tok string) bool { return len(tok) == 64 }, false},
 		{"given token", []string{"--admin-token", "s3cret"}, func(tok string) bool { return tok == "s3cret" }, false},
-		{"open", []string{"--open"}, func(tok string) bool { return tok == "" }, false},
-		{"open with token", []string{"--open", "--admin-token", "x"}, nil, true},
+		{"open mode is gone", []string{"--open"}, nil, true},
 		{"bad cidr", []string{"--cluster-cidr", "nope"}, nil, true},
 	}
 	for _, tc := range cases {
@@ -99,6 +101,18 @@ func TestServerInstall(t *testing.T) {
 			if cfg.AdminToken != "" && tc.name == "generated token" && !strings.Contains(out, cfg.AdminToken) {
 				t.Fatal("generated token not printed")
 			}
+			// The CA exists after install and its pin is printed for the CLI.
+			caPEM, err := os.ReadFile(filepath.Join(m.root, cfg.PKIDir, pki.CACertFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+			hash, _ := pki.HashPEM(caPEM)
+			if !strings.Contains(out, "--ca-cert-hash "+hash) {
+				t.Fatalf("CA pin %s not printed:\n%s", hash, out)
+			}
+			if info, _ := os.Stat(filepath.Join(m.root, cfg.PKIDir, pki.CAKeyFile)); info.Mode().Perm() != 0o600 {
+				t.Fatalf("CA key mode %v", info.Mode())
+			}
 		})
 	}
 }
@@ -119,9 +133,10 @@ func TestNodeJoin(t *testing.T) {
 				f := apiservertest.New(t)
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
+				certs := pkitest.New(t)
 				ports := map[transport.Kind]string{}
 				for _, k := range []transport.Kind{transport.HTTP, transport.GRPC} {
-					srv, _ := transport.NewServer(k, f.Server, f.Auth)
+					srv, _ := transport.NewServer(k, f.Server, f.Auth, transport.WithTLS(certs.Server.TLSConfig()))
 					ln, err := net.Listen("tcp", "127.0.0.1:0")
 					if err != nil {
 						t.Fatal(err)
@@ -137,9 +152,18 @@ func TestNodeJoin(t *testing.T) {
 					}
 				}
 				m.calls = nil
-				out, err := m.run("node", "join", "--join-token", f.JoinToken, "--name", "node-c", "--private-ip", "192.168.0.3",
+				join := []string{"node", "join", "--join-token", f.JoinToken, "--name", "node-c", "--private-ip", "192.168.0.3",
 					"--control-plane-address", "127.0.0.1", "--http-port", ports[transport.HTTP], "--grpc-port", ports[transport.GRPC],
-					"--transport", string(kind), "--skip-containerd-check")
+					"--transport", string(kind), "--skip-containerd-check"}
+				// Without a pin, or with someone else's, the node must not
+				// talk to the server, and the token stays unused.
+				if _, err := m.run(join...); err == nil || !strings.Contains(err.Error(), "--ca-cert-hash") {
+					t.Fatalf("join without a CA: %v", err)
+				}
+				if _, err := m.run(append(join, "--ca-cert-hash", pkitest.New(t).Server.CAHash())...); err == nil {
+					t.Fatal("join with a wrong CA pin succeeded")
+				}
+				out, err := m.run(append(join, "--ca-cert-hash", certs.Server.CAHash())...)
 				if err != nil {
 					t.Fatalf("%v\n%s", err, out)
 				}
@@ -149,6 +173,9 @@ func TestNodeJoin(t *testing.T) {
 				}
 				if cfg.NodeName != "node-c" || cfg.Transport != string(kind) {
 					t.Fatalf("config %+v", cfg)
+				}
+				if hash, _ := pki.HashPEM([]byte(cfg.CACert)); hash != certs.Server.CAHash() {
+					t.Fatalf("saved CA %s, want %s", hash, certs.Server.CAHash())
 				}
 				if p, err := f.Auth.Authenticate(ctx, cfg.NodeAPIKey); err != nil || p.Node.ID != cfg.NodeID {
 					t.Fatalf("saved key does not authenticate: %v", err)
@@ -173,8 +200,26 @@ func TestNodeJoin(t *testing.T) {
 
 				// The token was single use.
 				if _, err := m.run("node", "join", "--join-token", f.JoinToken, "--name", "node-d", "--private-ip", "192.168.0.4",
-					"--control-plane-address", "127.0.0.1", "--grpc-port", ports[transport.GRPC], "--skip-containerd-check"); err == nil {
-					t.Fatal("used token accepted")
+					"--control-plane-address", "127.0.0.1", "--http-port", ports[transport.HTTP], "--grpc-port", ports[transport.GRPC],
+					"--ca-cert-hash", certs.Server.CAHash(), "--skip-containerd-check"); err == nil || !strings.Contains(err.Error(), "already used") {
+					t.Fatalf("used token: %v", err)
+				}
+
+				// trust-ca restores a config that lost its CA, as on a node
+				// joined before the server spoke TLS.
+				cfg.CACert = ""
+				data, _ := json.Marshal(cfg)
+				if err := os.WriteFile(filepath.Join(m.root, agentconfig.Path), data, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := agentconfig.Load(filepath.Join(m.root, agentconfig.Path)); err == nil || !strings.Contains(err.Error(), "trust-ca") {
+					t.Fatalf("config without CA: %v", err)
+				}
+				if out, err := m.run("node", "trust-ca", "--ca-cert-hash", certs.Server.CAHash()); err != nil {
+					t.Fatalf("%v\n%s", err, out)
+				}
+				if _, err := agentconfig.Load(filepath.Join(m.root, agentconfig.Path)); err != nil {
+					t.Fatalf("after trust-ca: %v", err)
 				}
 			})
 		}
@@ -192,7 +237,7 @@ func TestNodeJoinNeedsContainerd(t *testing.T) {
 
 func TestUnitsRunSingleBinary(t *testing.T) {
 	m := newMachine(t, host.Binary, "/usr/share/atellar/migrations/001_initial.sql")
-	if _, err := m.run("server", "install", "--database-url", "postgres://x", "--open"); err != nil {
+	if _, err := m.run("server", "install", "--database-url", "postgres://x"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.run("node", "install"); err != nil {
@@ -211,7 +256,7 @@ func TestCommandTree(t *testing.T) {
 	for _, path := range [][]string{
 		{"config", "set-cluster"}, {"nodes", "list"}, {"nodes", "watch"}, {"containers", "create"},
 		{"containers", "events"}, {"join-tokens", "create"}, {"server", "install"}, {"server", "run"},
-		{"node", "install"}, {"node", "join"}, {"node", "renew-key"}, {"agent", "run"}, {"version"},
+		{"node", "install"}, {"node", "join"}, {"node", "renew-key"}, {"node", "trust-ca"}, {"agent", "run"}, {"version"},
 	} {
 		if c, _, err := root.Find(path); err != nil || c.Name() != path[len(path)-1] {
 			t.Errorf("atellar %s missing", strings.Join(path, " "))

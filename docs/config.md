@@ -15,10 +15,28 @@
 | `GRPC_PORT` | `9090` | gRPC port; must differ from `PORT` |
 | `CLUSTER_OVERLAY_CIDR` | `10.0.0.0/8` | IPv4 range split into node subnets |
 | `NODE_SUBNET_PREFIX_LEN` | `24` | Node subnet size, between the cluster prefix and 30 |
-| `ADMIN_TOKEN` | empty | Admin token. Empty runs the cluster open: every unauthenticated caller is admin |
+| `ADMIN_TOKEN` | required | Admin token |
 | `NODE_STALE_AFTER` | `30s` | Heartbeat age after which a node becomes `not_ready` |
+| `PKI_DIR` | `/etc/atellar/pki` | Cluster CA and server certificate; missing files are created at start |
+| `TLS_SANS` | empty | Comma separated extra DNS names or IPs for the server certificate |
 
 Invalid values stop the server at start with one message per problem.
+
+### PKI
+
+`PKI_DIR` holds four files:
+
+| File | Mode | |
+|------|------|---|
+| `ca.crt` | 0644 | Cluster CA, valid 10 years. Clients and agents trust only this |
+| `ca.key` | 0600 | CA key. Back it up: losing it means re-trusting every node and client |
+| `server.crt` | 0644 | Server certificate for `atellar-apiserver` and `TLS_SANS`, valid one year |
+| `server.key` | 0600 | Server key |
+
+The server reissues `server.crt` from the CA 30 days before it expires, or at
+start when `TLS_SANS` changed, without a restart and without touching the CA.
+The CA hash, `sha256:` and the hex SHA-256 of the CA public key, is logged at
+start and printed by `atellar server install`.
 
 ## Node agent
 
@@ -29,6 +47,7 @@ rewrites it when it renews its API key.
 {
   "control_plane": {"address": "10.0.0.10", "http_port": 8080, "grpc_port": 9090},
   "transport": "grpc",
+  "ca_cert": "-----BEGIN CERTIFICATE-----\n...",
   "node_id": "node_...",
   "node_name": "node-1",
   "node_api_key": "...",
@@ -44,6 +63,7 @@ rewrites it when it renews its API key.
 |-------|---------|---------|
 | `control_plane` | required | API server address and ports |
 | `transport` | `grpc` | `grpc` or `http` |
+| `ca_cert` | required | Cluster CA (PEM), written by `node join` or `node trust-ca` |
 | `node_id`, `node_api_key`, `api_key_expires_at` | required | Written by `node join` |
 | `containerd_sock` | `/run/containerd/containerd.sock` | containerd socket |
 | `heartbeat_interval` | `5s` | Heartbeat period; keep it well below `NODE_STALE_AFTER` |
@@ -64,7 +84,7 @@ rewrites it when it renews its API key.
 {
   "current_context": "prod",
   "clusters": {
-    "prod": {"address": "10.0.0.10", "http_port": 8080, "grpc_port": 9090, "transport": "grpc", "token": "..."}
+    "prod": {"address": "10.0.0.10", "http_port": 8080, "grpc_port": 9090, "transport": "grpc", "token": "...", "ca_cert": "-----BEGIN CERTIFICATE-----\n..."}
   },
   "contexts": {
     "prod": {"cluster": "prod"}

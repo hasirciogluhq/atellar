@@ -3,11 +3,13 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 
@@ -23,13 +25,19 @@ type Server struct {
 	grpc *grpc.Server
 }
 
-func New(svc api.Interface, auth authn.Authenticator) *Server {
-	g := grpc.NewServer(
+// New returns a server. A nil tlsConfig serves cleartext, which only tests
+// use.
+func New(svc api.Interface, auth authn.Authenticator, tlsConfig *tls.Config) *Server {
+	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(unaryAuth(auth)),
 		grpc.ChainStreamInterceptor(streamAuth(auth)),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
 		grpc.KeepaliveParams(keepalive.ServerParameters{Time: 30 * time.Second, Timeout: 10 * time.Second}),
-	)
+	}
+	if tlsConfig != nil {
+		opts = append(opts, grpc.Creds(credentials.NewTLS(tlsConfig)))
+	}
+	g := grpc.NewServer(opts...)
 	g.RegisterService(serviceDesc(svc), nil)
 	return &Server{grpc: g}
 }

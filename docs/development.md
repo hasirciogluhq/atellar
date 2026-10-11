@@ -51,8 +51,13 @@ What the suite covers:
 - **Authorization matrix.** `apiservertest.Cases()` lists every API method
   with the expected result for five callers (anonymous, admin, the owning
   node, another node, a bad token). `pkg/apiserver` runs it against the
-  implementation in closed and open mode; `pkg/transport` runs it over HTTP and
-  gRPC, so every method is checked for every caller on every transport.
+  implementation; `pkg/transport` runs it over HTTP and gRPC with TLS, so every
+  method is checked for every caller on every transport.
+- **TLS and CA pinning**: `pkg/pki` covers CA reuse, server certificate
+  renewal, pin checks (including a server that shows the real CA but signs
+  with another key); the server, CLI and join tests only talk TLS and check
+  that wrong pins and foreign CAs are refused. `pkg/pki/pkitest` creates
+  throwaway PKI for tests.
 - **Error reasons** survive both transports unchanged.
 - **Watches**: snapshot, bookmark, live changes and key rotation over both
   transports.

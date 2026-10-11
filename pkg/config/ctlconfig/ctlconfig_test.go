@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hasirciogluhq/atellar/pkg/client"
+	"github.com/hasirciogluhq/atellar/pkg/pki/pkitest"
 )
 
 func TestContexts(t *testing.T) {
@@ -18,15 +19,22 @@ func TestContexts(t *testing.T) {
 		t.Fatal("empty config has a current cluster")
 	}
 
-	prod := Cluster{ControlPlane: client.ControlPlane{Address: "10.0.0.1", HTTPPort: 8080, GRPCPort: 9090}, Token: "t"}
+	ca := string(pkitest.New(t).Server.CAPEM())
+	prod := Cluster{ControlPlane: client.ControlPlane{Address: "10.0.0.1", HTTPPort: 8080, GRPCPort: 9090}, Token: "t", CACert: ca}
 	if err := cfg.SetCluster("prod", prod); err != nil {
 		t.Fatal(err)
 	}
 	if err := cfg.SetCluster("", prod); err == nil {
 		t.Fatal("unnamed cluster accepted")
 	}
-	if err := cfg.SetCluster("bad", Cluster{ControlPlane: prod.ControlPlane, Transport: "smtp"}); err == nil {
+	if err := cfg.SetCluster("bad", Cluster{ControlPlane: prod.ControlPlane, Transport: "smtp", CACert: ca}); err == nil {
 		t.Fatal("bad transport accepted")
+	}
+	if err := cfg.SetCluster("bad", Cluster{ControlPlane: prod.ControlPlane}); err == nil {
+		t.Fatal("cluster without CA accepted")
+	}
+	if err := cfg.SetCluster("bad", Cluster{ControlPlane: prod.ControlPlane, CACert: "junk"}); err == nil {
+		t.Fatal("cluster with a broken CA accepted")
 	}
 	if err := cfg.SetContext("p", "missing"); err == nil {
 		t.Fatal("context to missing cluster accepted")

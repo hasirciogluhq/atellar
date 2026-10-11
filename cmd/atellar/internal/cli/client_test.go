@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/hasirciogluhq/atellar/cmd/atellar/internal/host"
 	v1 "github.com/hasirciogluhq/atellar/pkg/apis/core/v1"
 	"github.com/hasirciogluhq/atellar/pkg/apiserver/apiservertest"
+	"github.com/hasirciogluhq/atellar/pkg/pki/pkitest"
 	"github.com/hasirciogluhq/atellar/pkg/transport"
 )
 
@@ -22,15 +24,17 @@ type cli struct {
 	f          *apiservertest.Fixture
 	configPath string
 	ports      map[transport.Kind]int
+	caHash     string
 }
 
 func newCLI(t *testing.T) *cli {
 	f := apiservertest.New(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+	certs := pkitest.New(t)
 	ports := map[transport.Kind]int{}
 	for _, kind := range []transport.Kind{transport.HTTP, transport.GRPC} {
-		srv, _ := transport.NewServer(kind, f.Server, f.Auth)
+		srv, _ := transport.NewServer(kind, f.Server, f.Auth, transport.WithTLS(certs.Server.TLSConfig()))
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
@@ -39,12 +43,23 @@ func newCLI(t *testing.T) *cli {
 		go func() { _ = srv.Serve(ctx, ln) }()
 	}
 	c := &cli{t: t, f: f, configPath: filepath.Join(t.TempDir(), "config"), ports: ports}
+	// One cluster trusts the CA through its pin, the other through the file.
+	caFile := filepath.Join(t.TempDir(), "ca.crt")
+	if err := os.WriteFile(caFile, certs.Server.CAPEM(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	trust := map[string][]string{
+		"http": {"--ca-cert-hash", certs.Server.CAHash()},
+		"grpc": {"--ca-cert", caFile},
+	}
 	for _, kind := range []string{"http", "grpc"} {
-		c.ok("config", "set-cluster", kind, "--address", "127.0.0.1",
+		args := []string{"config", "set-cluster", kind, "--address", "127.0.0.1",
 			"--http-port", strconv.Itoa(ports[transport.HTTP]), "--grpc-port", strconv.Itoa(ports[transport.GRPC]),
-			"--transport", kind, "--token", apiservertest.AdminToken)
+			"--transport", kind, "--token", apiservertest.AdminToken}
+		c.ok(append(args, trust[kind]...)...)
 		c.ok("config", "set-context", kind, "--cluster", kind)
 	}
+	c.caHash = certs.Server.CAHash()
 	return c
 }
 
@@ -120,7 +135,8 @@ func TestCommandsOverBothTransports(t *testing.T) {
 				t.Fatalf("events:\n%s", out)
 			}
 
-			if out := run("join-tokens", "create", "--multi-use"); !strings.Contains(out, "atellar node join --join-token ") {
+			if out := run("join-tokens", "create", "--multi-use"); !strings.Contains(out, "atellar node join --join-token ") ||
+				!strings.Contains(out, "--ca-cert-hash "+c.caHash) {
 				t.Fatalf("join-tokens create:\n%s", out)
 			}
 			if out := run("join-tokens", "list"); strings.Count(out, "jtok_") < 1 {
@@ -142,9 +158,40 @@ func TestCommandsOverBothTransports(t *testing.T) {
 
 func TestWrongToken(t *testing.T) {
 	c := newCLI(t)
-	c.ok("config", "set-cluster", "bad", "--address", "127.0.0.1", "--grpc-port", strconv.Itoa(c.ports[transport.GRPC]), "--token", "wrong")
+	c.ok("config", "set-cluster", "bad", "--address", "127.0.0.1", "--http-port", strconv.Itoa(c.ports[transport.HTTP]),
+		"--grpc-port", strconv.Itoa(c.ports[transport.GRPC]), "--token", "wrong", "--ca-cert-hash", c.caHash)
 	c.ok("config", "set-context", "bad", "--cluster", "bad")
 	if _, err := c.run("--context", "bad", "nodes", "list"); err == nil || !strings.Contains(err.Error(), "invalid credential") {
 		t.Fatalf("wrong token: %v", err)
+	}
+}
+
+// TestSetClusterCA checks that set-cluster refuses to store a cluster it
+// cannot trust.
+func TestSetClusterCA(t *testing.T) {
+	c := newCLI(t)
+	base := []string{"config", "set-cluster", "x", "--address", "127.0.0.1",
+		"--http-port", strconv.Itoa(c.ports[transport.HTTP]), "--grpc-port", strconv.Itoa(c.ports[transport.GRPC])}
+	other := pkitest.New(t).Server.CAHash()
+	otherFile := filepath.Join(t.TempDir(), "other.crt")
+	if err := os.WriteFile(otherFile, pkitest.New(t).Server.CAPEM(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, extra := range map[string][]string{
+		"no CA":             nil,
+		"wrong pin":         {"--ca-cert-hash", other},
+		"malformed pin":     {"--ca-cert-hash", "md5:abc"},
+		"file not matching": {"--ca-cert", otherFile, "--ca-cert-hash", c.caHash},
+		"missing file":      {"--ca-cert", filepath.Join(t.TempDir(), "none")},
+	} {
+		if _, err := c.run(append(base, extra...)...); err == nil {
+			t.Errorf("%s: set-cluster succeeded", name)
+		}
+	}
+	// A cluster that trusts a foreign CA fails at connect time.
+	c.ok(append(base, "--ca-cert", otherFile, "--token", apiservertest.AdminToken)...)
+	c.ok("config", "set-context", "x", "--cluster", "x")
+	if _, err := c.run("--context", "x", "nodes", "list"); err == nil {
+		t.Fatal("nodes list succeeded against an untrusted server")
 	}
 }

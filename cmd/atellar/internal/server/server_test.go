@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 	v1 "github.com/hasirciogluhq/atellar/pkg/apis/core/v1"
 	"github.com/hasirciogluhq/atellar/pkg/client"
 	"github.com/hasirciogluhq/atellar/pkg/config/serverconfig"
+	"github.com/hasirciogluhq/atellar/pkg/pki"
+	"github.com/hasirciogluhq/atellar/pkg/pki/pkitest"
 	"github.com/hasirciogluhq/atellar/pkg/storage"
 	"github.com/hasirciogluhq/atellar/pkg/storage/memory"
 	"github.com/hasirciogluhq/atellar/pkg/storage/postgres"
@@ -56,6 +59,12 @@ func testRun(t *testing.T, store storage.Interface) {
 	cfg.DatabaseURL = "unused"
 	cfg.AdminToken = "admin"
 	cfg.NodeStaleAfter = 300 * time.Millisecond
+	cfg.PKIDir = t.TempDir()
+	// Run reuses the CA created here, so the test knows its pin up front.
+	certs, err := pki.LoadOrCreateServer(cfg.PKIDir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	httpLn, httpPort := listen(t)
 	grpcLn, grpcPort := listen(t)
 	cp := client.ControlPlane{Address: "127.0.0.1", HTTPPort: httpPort, GRPCPort: grpcPort}
@@ -64,15 +73,41 @@ func testRun(t *testing.T, store storage.Interface) {
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, cfg, store, Listeners{HTTP: httpLn, GRPC: grpcLn}) }()
 
+	// A joining node only knows the pin; the CA it fetches must be the one
+	// Run serves, and a wrong pin must be refused.
+	addr := net.JoinHostPort(cp.Address, strconv.Itoa(httpPort))
+	caPEM := waitFetchCA(t, addr, certs.CAHash())
+	if got, _ := pki.HashPEM(caPEM); got != certs.CAHash() {
+		t.Fatalf("fetched CA %s, want %s", got, certs.CAHash())
+	}
+	other := pkitest.New(t)
+	if _, err := pki.FetchCA(ctx, addr, other.Server.CAHash()); err == nil {
+		t.Fatal("FetchCA accepted a wrong pin")
+	}
+	trust, err := pki.ClientConfig(caPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	for _, kind := range []string{"http", "grpc"} {
-		anon, err := client.New(client.Config{ControlPlane: cp, Transport: kind})
+		// A client that trusts another CA cannot talk to the server.
+		stranger, err := client.New(client.Config{ControlPlane: cp, Transport: kind, TLS: other.Client})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := stranger.Nodes().Register(ctx, v1.RegisterNodeRequest{JoinToken: "x"}); api.ReasonOf(err) != api.ReasonUnavailable {
+			t.Fatalf("%s: client with a foreign CA: %v", kind, err)
+		}
+		_ = stranger.Close()
+
+		anon, err := client.New(client.Config{ControlPlane: cp, Transport: kind, TLS: trust})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if _, err := anon.Nodes().List(ctx); !api.IsUnauthorized(err) {
 			t.Fatalf("%s: anonymous list: %v", kind, err)
 		}
-		admin, _ := client.New(client.Config{ControlPlane: cp, Transport: kind, Token: client.Static("admin")})
+		admin, _ := client.New(client.Config{ControlPlane: cp, Transport: kind, Token: client.Static("admin"), TLS: trust})
 		jt, err := admin.JoinTokens().Create(ctx, v1.CreateJoinTokenRequest{})
 		if err != nil {
 			t.Fatalf("%s: create join token: %v", kind, err)
@@ -81,7 +116,7 @@ func testRun(t *testing.T, store storage.Interface) {
 		if err != nil {
 			t.Fatalf("%s: register: %v", kind, err)
 		}
-		agent, _ := client.New(client.Config{ControlPlane: cp, Transport: kind, Token: client.Static(reg.NodeAPIKey)})
+		agent, _ := client.New(client.Config{ControlPlane: cp, Transport: kind, Token: client.Static(reg.NodeAPIKey), TLS: trust})
 		if err := agent.Nodes().SelfHeartbeat(ctx); err != nil {
 			t.Fatalf("%s: heartbeat: %v", kind, err)
 		}
@@ -123,13 +158,39 @@ func testRun(t *testing.T, store storage.Interface) {
 	}
 }
 
+// waitFetchCA retries until Run is listening.
+func waitFetchCA(t *testing.T, addr, pin string) []byte {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		caPEM, err := pki.FetchCA(context.Background(), addr, pin)
+		if err == nil {
+			return caPEM
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("fetch CA: %v", err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func TestRunListenError(t *testing.T) {
 	busy, port := listen(t)
 	defer busy.Close()
 	cfg := serverconfig.Default()
+	cfg.AdminToken = "admin"
+	cfg.PKIDir = t.TempDir()
 	cfg.BindAddress = "127.0.0.1"
 	cfg.HTTPPort = port
 	if err := Run(context.Background(), cfg, memory.New(), Listeners{}); err == nil {
 		t.Fatal("Run succeeded on a busy port")
+	}
+}
+
+func TestRunRequiresAdminToken(t *testing.T) {
+	cfg := serverconfig.Default()
+	cfg.PKIDir = t.TempDir()
+	if err := Run(context.Background(), cfg, memory.New(), Listeners{}); err == nil {
+		t.Fatal("Run started without an admin token")
 	}
 }
