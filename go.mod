@@ -3,7 +3,7 @@ module github.com/hasirciogluhq/atellar
 go 1.25.0
 
 require (
-	github.com/containerd/containerd v1.7.35
+	github.com/containerd/containerd v1.7.36
 	github.com/containerd/containerd/api v1.8.0
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/gin-gonic/gin v1.12.0
