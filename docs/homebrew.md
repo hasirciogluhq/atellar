@@ -7,16 +7,18 @@ and pushes an updated formula to the tap repository.
 
 ## One-time setup
 
-1. Create a public repository named `hasirciogluhq/homebrew-tap` with at least
-   one commit (for example a README). Homebrew requires the `homebrew-` prefix.
+1. The public repository `hasirciogluhq/homebrew-tap` already exists (it also
+   hosts the `tokenix` formula). Homebrew requires the `homebrew-` prefix.
 2. Create a fine-grained personal access token with `Contents: Read and write`
-   on `hasirciogluhq/homebrew-tap` only.
+   on `hasirciogluhq/homebrew-tap` only. The existing `tokenix` token can be
+   reused if it has that scope; add it to this repository under the same
+   secret name.
 3. Add it to this repository as an Actions secret named
    `HOMEBREW_TAP_GITHUB_TOKEN` (Settings, Secrets and variables, Actions).
    `GITHUB_TOKEN` is provided automatically and needs no setup.
 
-If `homebrew-tap` already exists for another project, the formula
-`Formula/atellar.rb` is added next to the existing ones.
+The formula is written to `atellar.rb` at the root of the tap, next to
+`tokenix.rb`.
 
 ## Install
 
