@@ -1,0 +1,16 @@
+- The code must be professional, modern, small/basic
+- Go first. Reach the best result with the least code; no needless abstraction or complexity. Reuse code that already exists in the project (and well-known libraries) instead of writing new code.
+- One `atellar` binary and one CLI for every role (subcommands under `cmd/atellar`).
+- Folder structure must be well known for go lang programs like kubernetes
+- Edit CLAUDE.md only when the user clearly asks
+- Do not implement the user's words literally. Understand the goal behind a request and apply the most optimal, professional method that achieves it; push back when the request itself is flawed. If no sound method exists, do not implement it and explain why.
+- The project must have a local test suite script(s), the scripts are must be written in typescript with bun runtime.
+- For the testing you can use lima/limactl (virtual machine manager)
+- Test topology (not limited to a fixed VM count, keep RAM usage low):
+  - Build one `atellar-template` Alpine VM with every required package (Go, Docker, WireGuard tools, clang/llvm, nftables, ...) and clone every other VM from it instead of downloading again.
+  - 1 system VM: runs the Hub and one Manager per cluster as Docker containers (Docker only for fast testing; in production they run as service processes). No agent runs here.
+  - 3 clusters x 2 worker VMs = 6 workers. Workers run `atellar-agent` as a service.
+  - Underlay networks (segments) are independent of clusters and must be discovered, not configured: e.g. one cluster's workers on two different segments, and one segment shared by workers of two clusters. Segments cannot reach each other. All VMs also share one "public" network (every node's public IP) used for WireGuard and Manager/Hub access, so cross-segment traffic goes over WireGuard. Include at least one worker with no private underlay at all, and at least two workers with no public IP (behind NAT) in different segments, so direct, hole-punched and relayed WireGuard paths are all exercised.
+  - Bring everything up, admit workers into their clusters, connect Managers to the Hub, then run the checks.
+- Before testing the e2e the unit tests are must be passed %100
+- typescript tests must be under scripts/ts, typescript tools(like vm generate) must be under tools/ts
